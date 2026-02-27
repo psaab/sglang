@@ -5,7 +5,11 @@
 # (e.g. sm_100, sm_120) due to PyPI size limits. This script checks the local
 # cubin status against the flashinfer artifact repository and downloads any
 # missing files.
-set -euxo pipefail
+#
+# This script is best-effort: if the status check or download times out (e.g.
+# due to a GPU in error state blocking CUDA init), we warn and continue.
+# The pip package already includes cubins for common architectures (sm_80, sm_90).
+set -uxo pipefail
 
 # Use timeout to prevent hangs when GPUs are in error state (the flashinfer
 # import can trigger CUDA init which blocks on bad GPUs).
@@ -28,9 +32,13 @@ if echo "$CUBIN_STATUS" | grep -qE '^[0-9]+/[0-9]+$'; then
         echo "All flashinfer cubins already present (${CUBIN_STATUS}), skipping download"
     else
         echo "Cubins incomplete (${CUBIN_STATUS}), downloading..."
-        timeout 300 env FLASHINFER_LOGGING_LEVEL=warning python3 -m flashinfer --download-cubin
+        if ! timeout 300 env FLASHINFER_LOGGING_LEVEL=warning python3 -m flashinfer --download-cubin; then
+            echo "WARNING: flashinfer cubin download failed or timed out, continuing with existing cubins"
+        fi
     fi
 else
-    echo "Could not determine cubin status, downloading as fallback..."
-    timeout 300 env FLASHINFER_LOGGING_LEVEL=warning python3 -m flashinfer --download-cubin
+    echo "Could not determine cubin status (status check timed out or failed), attempting download..."
+    if ! timeout 300 env FLASHINFER_LOGGING_LEVEL=warning python3 -m flashinfer --download-cubin; then
+        echo "WARNING: flashinfer cubin download failed or timed out, continuing with existing cubins"
+    fi
 fi
