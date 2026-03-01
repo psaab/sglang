@@ -111,6 +111,15 @@ class HybridAttnBackend(AttentionBackend):
     def get_cuda_graph_seq_len_fill_value(self):
         return self.decode_backend.get_cuda_graph_seq_len_fill_value()
 
+    def forward(self, *args, **kwargs):
+        forward_batch = kwargs.get("forward_batch") or (
+            args[4] if len(args) > 4 else None
+        )
+        if forward_batch is None:
+            return self.decode_backend.forward(*args, **kwargs)
+        backend = self._select_backend(forward_batch.forward_mode)
+        return backend.forward(*args, **kwargs)
+
     def forward_decode(
         self,
         q: torch.Tensor,

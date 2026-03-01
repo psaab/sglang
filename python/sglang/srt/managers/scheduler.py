@@ -693,9 +693,20 @@ class Scheduler(
                 logger.info("Using experimental C++ radix tree implementation.")
                 self.tree_cache = RadixCacheCpp(params=params, server_args=server_args)
             elif self.enable_hierarchical_cache:
-                from sglang.srt.mem_cache.hiradix_cache import HiRadixCache
+                if self.is_hybrid_ssm:
+                    from sglang.srt.mem_cache.hi_mamba_radix_cache import (
+                        HiMambaRadixCache,
+                    )
 
-                self.tree_cache = HiRadixCache(params=params, server_args=server_args)
+                    self.tree_cache = HiMambaRadixCache(
+                        params=params, server_args=server_args
+                    )
+                else:
+                    from sglang.srt.mem_cache.hiradix_cache import HiRadixCache
+
+                    self.tree_cache = HiRadixCache(
+                        params=params, server_args=server_args
+                    )
                 self.tp_worker.register_hicache_layer_transfer_counter(
                     self.tree_cache.cache_controller.layer_done_counter
                 )
