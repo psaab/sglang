@@ -779,7 +779,7 @@ class HiMambaRadixCache(MambaRadixCache):
     ) -> Tuple[List[torch.Tensor], TreeNode, int]:
         """Walk tree through evicted nodes but only collect device values."""
         node = self.root_node
-        node.last_access_time = time.monotonic()
+        node.last_access_time = get_last_access_time()
         child_key = self.get_child_key_fn(key)
 
         value: List[torch.Tensor] = []
@@ -788,7 +788,7 @@ class HiMambaRadixCache(MambaRadixCache):
 
         while len(key) > 0 and child_key in node.children.keys():
             child = node.children[child_key]
-            child.last_access_time = time.monotonic()
+            child.last_access_time = get_last_access_time()
 
             if child.evicted and not child.backuped:
                 break
@@ -985,8 +985,9 @@ class HiMambaRadixCache(MambaRadixCache):
 
     def inc_lock_ref(self, node: TreeNode) -> Optional[int]:
         if self.disable:
-            return None
+            return 0
 
+        delta = 0
         if node.mamba_value is not None:
             if node.mamba_lock_ref == 0:
                 self.mamba_evictable_size_ -= len(node.mamba_value)
@@ -1004,9 +1005,10 @@ class HiMambaRadixCache(MambaRadixCache):
             if node.full_lock_ref == 0:
                 self.full_evictable_size_ -= len(node.value)
                 self.full_protected_size_ += len(node.value)
+                delta -= len(node.value)
             node.full_lock_ref += 1
             node = node.parent
-        return None
+        return delta
 
     def dec_lock_ref(self, node: TreeNode):
         if self.disable:
