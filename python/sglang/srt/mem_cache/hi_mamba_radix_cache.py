@@ -986,7 +986,7 @@ class HiMambaRadixCache(MambaRadixCache):
     def inc_lock_ref(self, node: TreeNode) -> Optional[int]:
         if self.disable:
             return 0
-
+            
         delta = 0
         if node.mamba_value is not None:
             if node.mamba_lock_ref == 0:
@@ -1012,7 +1012,9 @@ class HiMambaRadixCache(MambaRadixCache):
 
     def dec_lock_ref(self, node: TreeNode):
         if self.disable:
-            return None
+            return 0
+
+        delta = 0
 
         if node.mamba_value is not None and node.mamba_lock_ref > 0:
             if node.mamba_lock_ref == 1:
@@ -1031,8 +1033,10 @@ class HiMambaRadixCache(MambaRadixCache):
             if node.full_lock_ref == 1:
                 self.full_evictable_size_ += len(node.value)
                 self.full_protected_size_ -= len(node.value)
+                delta += len(node.value)
             node.full_lock_ref -= 1
             node = node.parent
+        return delta
 
     # ---- L3 Support ----
 
