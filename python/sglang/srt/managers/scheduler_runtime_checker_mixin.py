@@ -123,21 +123,9 @@ class SchedulerRuntimeCheckerMixin:
             mamba_evictable_size,
         ) = self._get_mamba_token_info()
         session_held = self._session_held_tokens()
-        mamba_in_flight = sum(
-            1
-            for req in self.waiting_queue
-            if getattr(req, "mamba_pool_idx", None) is not None
-        )
-        if self.running_batch and not self.running_batch.is_empty():
-            mamba_in_flight += sum(
-                1
-                for req in self.running_batch.reqs
-                if getattr(req, "mamba_pool_idx", None) is not None
-            )
         memory_leak = (
             full_num_used != self.tree_cache.full_protected_size() + session_held
-            or mamba_num_used
-            != self.tree_cache.mamba_protected_size() + mamba_in_flight
+            or mamba_num_used != self.tree_cache.mamba_protected_size()
         )
         if memory_leak:
             free_full_pages = set(
@@ -157,32 +145,13 @@ class SchedulerRuntimeCheckerMixin:
             cached_mamba_pages = set(
                 self.tree_cache.all_mamba_values_flatten().tolist()
             )
-            in_flight_mamba_pages = set()
-            for req in self.waiting_queue:
-                mid = getattr(req, "mamba_pool_idx", None)
-                if mid is not None:
-                    in_flight_mamba_pages.add(
-                        mid.item() if hasattr(mid, "item") else int(mid)
-                    )
-            if self.running_batch and not self.running_batch.is_empty():
-                for req in self.running_batch.reqs:
-                    mid = getattr(req, "mamba_pool_idx", None)
-                    if mid is not None:
-                        in_flight_mamba_pages.add(
-                            mid.item() if hasattr(mid, "item") else int(mid)
-                        )
-            expected_mamba_pages = set(
-                range(1, self.req_to_token_pool.mamba_pool.size + 1)
-            )
+            expected_mamba_pages = set(range(self.req_to_token_pool.mamba_pool.size))
             leaked_mamba_pages = (
-                expected_mamba_pages
-                - free_mamba_pages
-                - cached_mamba_pages
-                - in_flight_mamba_pages
+                expected_mamba_pages - free_mamba_pages - cached_mamba_pages
             )
             token_msg = (
                 f"{full_available_size=}, {full_evictable_size=}, {self.token_to_kv_pool_allocator.size=}, {self.tree_cache.full_protected_size()=}\n"
-                f"{mamba_available_size=}, {mamba_evictable_size=}, {self.req_to_token_pool.mamba_pool.size=}, {self.tree_cache.mamba_protected_size()=}, {mamba_in_flight=}, leaked_full_pages={leaked_full_pages if len(leaked_full_pages) > 0 else None}, leaked_mamba_pages={leaked_mamba_pages if len(leaked_mamba_pages) > 0 else None}\n"
+                f"{mamba_available_size=}, {mamba_evictable_size=}, {self.req_to_token_pool.mamba_pool.size=}, {self.tree_cache.mamba_protected_size()=}, leaked_full_pages={leaked_full_pages if len(leaked_full_pages) > 0 else None}, leaked_mamba_pages={leaked_mamba_pages if len(leaked_mamba_pages) > 0 else None}\n"
             )
         else:
             token_msg = (

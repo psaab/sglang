@@ -856,7 +856,11 @@ class Req(ReqDllmMixin):
         # Whether request reached finished condition
         return self.finished_reason is not None
 
-    def init_next_round_input(self, tree_cache: Optional[BasePrefixCache] = None):
+    def init_next_round_input(
+        self,
+        tree_cache: Optional[BasePrefixCache] = None,
+        cow_mamba: Optional[bool] = None,
+    ):
         if self.is_dllm():
             self._init_fill_ids_for_dllm()
             self.determine_dllm_phase()
@@ -872,11 +876,13 @@ class Req(ReqDllmMixin):
         token_ids = self.fill_ids[:max_prefix_len]
 
         if tree_cache is not None:
+            if cow_mamba is None:
+                cow_mamba = tree_cache.supports_mamba()
             match_result = tree_cache.match_prefix(
                 MatchPrefixParams(
                     key=RadixKey(token_ids=token_ids, extra_key=self.extra_key),
                     req=self,
-                    cow_mamba=tree_cache.supports_mamba(),
+                    cow_mamba=cow_mamba,
                 )
             )
             (
