@@ -140,6 +140,9 @@ class HiMambaRadixCache(MambaRadixCache):
         )
         self.load_back_threshold = 10
 
+        self.evictable_full_device_leaves: set[TreeNode] = set()
+        self.evictable_full_host_leaves: set[TreeNode] = set()
+
         # Detach storage backend automatically on process shutdown
         atexit.register(self.shutdown)
 
@@ -154,6 +157,8 @@ class HiMambaRadixCache(MambaRadixCache):
         self.ongoing_prefetch = {}
         self.ongoing_backup = {}
         self.prefetch_loaded_tokens_by_reqid.clear()
+        self.evictable_full_device_leaves.clear()
+        self.evictable_full_host_leaves.clear()
         super().reset()
 
     def write_backup(self, node: TreeNode, write_back=False):
@@ -235,6 +240,10 @@ class HiMambaRadixCache(MambaRadixCache):
                 else:
                     self.mamba_lru_list.insert_mru(n)
                     self.mamba_evictable_size_ += len(n.mamba_value)
+
+            self._update_leaf_status(n)
+
+        self._update_leaf_status(ancestor_node)
 
         self.inc_lock_ref(last_hit_node)
         self.ongoing_load_back[last_hit_node.id] = last_hit_node
@@ -341,31 +350,47 @@ class HiMambaRadixCache(MambaRadixCache):
                 self.cache_controller.storage_backend.get_stats()
             )
 
-    def _collect_leaves_device_full(self) -> List[TreeNode]:
-        """Collect device leaves for full KV eviction."""
+    def _protect_host_node(self, node: TreeNode):
+        node.protect_host()
+        self.evictable_full_host_leaves.discard(node)
 
-        def is_device_leaf(node):
-            if node.evicted:
-                return False
-            if node == self.root_node:
-                return False
-            if node.full_lock_ref > 0:
-                return False
-            if len(node.children) == 0:
-                return True
-            return all(c.evicted for c in node.children.values())
+    def _release_host_node(self, node: TreeNode):
+        node.release_host()
+        if node.host_ref_counter == 0:
+            self._update_full_host_leaf_status(node)
 
-        ret_list = []
-        stack = [self.root_node]
-        while stack:
-            cur_node = stack.pop()
-            if is_device_leaf(cur_node):
-                ret_list.append(cur_node)
-            else:
-                for child in cur_node.children.values():
-                    if not child.evicted:
-                        stack.append(child)
-        return ret_list
+    def _discard_from_leaf_sets(self, node: TreeNode):
+        self.evictable_full_device_leaves.discard(node)
+        self.evictable_full_host_leaves.discard(node)
+
+    def _update_leaf_status(self, node: TreeNode):
+        self._update_full_device_leaf_status(node)
+        self._update_full_host_leaf_status(node)
+
+    def _update_full_device_leaf_status(self, node: TreeNode):
+        if node == self.root_node or node.evicted or node.full_lock_ref > 0:
+            self.evictable_full_device_leaves.discard(node)
+            return
+        for child in node.children.values():
+            if not child.evicted:
+                self.evictable_full_device_leaves.discard(node)
+                return
+        self.evictable_full_device_leaves.add(node)
+
+    def _update_full_host_leaf_status(self, node: TreeNode):
+        if (
+            not node.evicted
+            or not node.backuped
+            or node == self.root_node
+            or node.host_ref_counter > 0
+        ):
+            self.evictable_full_host_leaves.discard(node)
+            return
+        for child in node.children.values():
+            if child.evicted and child.backuped:
+                self.evictable_full_host_leaves.discard(node)
+                return
+        self.evictable_full_host_leaves.add(node)
 
     def _evict_to_host(self, node: TreeNode) -> int:
         """Evict full KV to host. Mamba stays on device. Returns num evicted."""
@@ -382,19 +407,26 @@ class HiMambaRadixCache(MambaRadixCache):
             self.full_lru_list.remove_node(node)
 
         node.value = None
+        self._update_leaf_status(node)
+        self._update_full_device_leaf_status(node.parent)
         return num_full
 
     def _delete_tombstone_leaf(self, node: TreeNode) -> None:
         """Remove a tombstone leaf from the tree and free HiCache resources."""
         assert node.mamba_value is None, f"node has mamba value, {node.id=}"
         assert len(node.children) == 0, f"leaf node has children, {node.id=}"
+        parent = node.parent
         key = self.get_child_key_fn(node.key)
-        v = node.parent.children.pop(key, None)
+        v = parent.children.pop(key, None)
         assert v == node, f"parent does not have child key, {key}"
+
+        self._discard_from_leaf_sets(node)
 
         if node.backuped and node.host_ref_counter == 0:
             self.cache_controller.evict_host(node.host_value)
             node.host_value = None
+
+        self._update_leaf_status(parent)
 
     def _iteratively_delete_tombstone_leaf(
         self, node: TreeNode
@@ -422,6 +454,7 @@ class HiMambaRadixCache(MambaRadixCache):
                 if self.full_lru_list.in_list(parent):
                     self.full_lru_list.remove_node(parent)
 
+            self._discard_from_leaf_sets(parent)
             self._delete_tombstone_leaf(parent)
             node = parent
 
@@ -436,27 +469,20 @@ class HiMambaRadixCache(MambaRadixCache):
         mamba_num_evicted = 0
 
         if full_num_tokens > 0:
-            leaves = self._collect_leaves_device_full()
+            leaves = list(self.evictable_full_device_leaves)
             eviction_heap = [(n.last_access_time, n) for n in leaves]
             heapq.heapify(eviction_heap)
 
             while full_num_evicted < full_num_tokens and eviction_heap:
                 _, x = heapq.heappop(eviction_heap)
-                if x.full_lock_ref > 0 or x.evicted:
-                    continue
-                if not all(c.evicted for c in x.children.values()):
+                if x not in self.evictable_full_device_leaves:
                     continue
 
                 evicted_full = self._evict_to_host(x)
                 full_num_evicted += evicted_full
 
                 parent = x.parent
-                if (
-                    parent != self.root_node
-                    and parent.value is not None
-                    and parent.full_lock_ref == 0
-                    and all(c.evicted for c in parent.children.values())
-                ):
+                if parent in self.evictable_full_device_leaves:
                     heapq.heappush(eviction_heap, (parent.last_access_time, parent))
 
         if params.mamba_num > 0:
@@ -467,83 +493,35 @@ class HiMambaRadixCache(MambaRadixCache):
             mamba_num_evicted=mamba_num_evicted,
         )
 
-    def _collect_host_leaves(self) -> List[TreeNode]:
-        """Collect 'host-view leaves' for bottom-up host eviction."""
-
-        def is_host_leaf(node):
-            if not node.evicted or not node.backuped:
-                return False
-            if node == self.root_node or node.host_ref_counter > 0:
-                return False
-            for child in node.children.values():
-                if child.evicted and child.backuped:
-                    return False
-            return True
-
-        ret_list = []
-        stack = [self.root_node]
-        while stack:
-            cur = stack.pop()
-            if is_host_leaf(cur):
-                ret_list.append(cur)
-            else:
-                stack.extend(cur.children.values())
-        return ret_list
-
     def evict_host(self, num_tokens: int):
         if self.enable_storage:
-            host_leaves = self._collect_host_leaves()
+            host_leaves = list(self.evictable_full_host_leaves)
             heap = [(n.last_access_time, n) for n in host_leaves]
             heapq.heapify(heap)
 
             num_evicted = 0
             while num_evicted < num_tokens and heap:
                 _, x = heapq.heappop(heap)
-                if not x.evicted or not x.backuped or x.host_ref_counter > 0:
-                    continue
-                if any(c.evicted and c.backuped for c in x.children.values()):
+                if x not in self.evictable_full_host_leaves:
                     continue
 
                 num_evicted += self.cache_controller.evict_host(x.host_value)
                 x.host_value = None
 
-                parent = x.parent
-                if (
-                    parent != self.root_node
-                    and parent.evicted
-                    and parent.backuped
-                    and parent.host_ref_counter == 0
-                    and not any(
-                        c.evicted and c.backuped for c in parent.children.values()
-                    )
-                ):
-                    heapq.heappush(heap, (parent.last_access_time, parent))
+                self.evictable_full_host_leaves.discard(x)
+                self._update_full_host_leaf_status(x.parent)
+                if x.parent in self.evictable_full_host_leaves:
+                    heapq.heappush(heap, (x.parent.last_access_time, x.parent))
             return
 
         # Non-L3 path: evict host leaves and clean up tree
-        leaves = []
-        stack = [self.root_node]
-        while stack:
-            cur = stack.pop()
-            if len(cur.children) == 0 and cur != self.root_node:
-                leaves.append(cur)
-            else:
-                stack.extend(cur.children.values())
-
-        heap = [
-            (n.last_access_time, n)
-            for n in leaves
-            if n.evicted
-            and n.backuped
-            and n != self.root_node
-            and n.host_ref_counter == 0
-        ]
+        heap = [(n.last_access_time, n) for n in self.evictable_full_host_leaves]
         heapq.heapify(heap)
 
         num_evicted = 0
         while num_evicted < num_tokens and heap:
             _, x = heapq.heappop(heap)
-            if not x.evicted or not x.backuped or x.host_ref_counter > 0:
+            if x not in self.evictable_full_host_leaves:
                 continue
 
             num_evicted += self.cache_controller.evict_host(x.host_value)
@@ -556,12 +534,16 @@ class HiMambaRadixCache(MambaRadixCache):
                 self.req_to_token_pool.mamba_pool.free(x.mamba_value)
                 x.mamba_value = None
 
+            self.evictable_full_host_leaves.discard(x)
+
+            parent = x.parent
             child_key = self.get_child_key_fn(x.key)
-            v = x.parent.children.pop(child_key, None)
+            v = parent.children.pop(child_key, None)
             assert v == x, f"parent does not have child key, {x.id=}"
 
-            if len(x.parent.children) == 0 and x.parent.evicted and x.parent.backuped:
-                heapq.heappush(heap, (x.parent.last_access_time, x.parent))
+            self._update_leaf_status(parent)
+            if parent in self.evictable_full_host_leaves:
+                heapq.heappush(heap, (parent.last_access_time, parent))
 
     def evict_mamba(self, mamba_num: int) -> int:
         if self.disable or mamba_num <= 0:
@@ -621,9 +603,14 @@ class HiMambaRadixCache(MambaRadixCache):
                 x.value = None
                 x.mamba_value = None
 
+                self._discard_from_leaf_sets(x)
+
+                parent = x.parent
                 child_key = self.get_child_key_fn(x.key)
-                v = x.parent.children.pop(child_key, None)
+                v = parent.children.pop(child_key, None)
                 assert v == x, f"parent does not have child key, {x.id=}"
+
+                self._update_leaf_status(parent)
                 _, _, cascade_mamba = self._iteratively_delete_tombstone_leaf(x)
                 mamba_num_evicted += cascade_mamba
 
@@ -648,6 +635,10 @@ class HiMambaRadixCache(MambaRadixCache):
             else:
                 self.mamba_lru_list.insert_mru(node)
                 self.mamba_evictable_size_ += len(node.mamba_value)
+
+        self._update_leaf_status(node)
+        if node.parent is not None:
+            self._update_leaf_status(node.parent)
 
     def _insert_helper(
         self,
@@ -741,6 +732,8 @@ class HiMambaRadixCache(MambaRadixCache):
         self.mamba_evictable_size_ += len(mamba_value)
         if self.enable_storage:
             new_node.hash_value = compute_node_hash_values(new_node, self.page_size)
+        self._update_full_device_leaf_status(new_node)
+        self._update_full_device_leaf_status(parent)
         return new_node
 
     def match_prefix(self, params: MatchPrefixParams) -> MatchResult:
@@ -892,6 +885,8 @@ class HiMambaRadixCache(MambaRadixCache):
         if child.evicted:
             return self._split_evicted_node(key, child, split_len)
 
+        self.evictable_full_device_leaves.discard(child)
+
         new_node = super()._split_node(key, child, split_len)
 
         if child.backuped:
@@ -902,11 +897,16 @@ class HiMambaRadixCache(MambaRadixCache):
             child.hash_value, split_len, self.page_size
         )
 
+        self._update_leaf_status(new_node)
+        self._update_leaf_status(child)
+
         return new_node
 
     def _split_evicted_node(
         self, key: RadixKey, child: TreeNode, split_len: int
     ) -> TreeNode:
+        self.evictable_full_host_leaves.discard(child)
+
         new_node = TreeNode()
         new_node.children = {self.get_child_key_fn(key[split_len:]): child}
         new_node.parent = child.parent
@@ -928,6 +928,9 @@ class HiMambaRadixCache(MambaRadixCache):
         child.parent = new_node
         child.key = child.key[split_len:]
         new_node.parent.children[self.get_child_key_fn(key)] = new_node
+
+        self._update_full_host_leaf_status(new_node)
+        self._update_full_host_leaf_status(child)
 
         return new_node
 
@@ -993,6 +996,7 @@ class HiMambaRadixCache(MambaRadixCache):
                 self.full_evictable_size_ -= len(node.value)
                 self.full_protected_size_ += len(node.value)
                 delta -= len(node.value)
+                self.evictable_full_device_leaves.discard(node)
             node.full_lock_ref += 1
             node = node.parent
         return delta
@@ -1022,6 +1026,8 @@ class HiMambaRadixCache(MambaRadixCache):
                 self.full_protected_size_ -= len(node.value)
                 delta += len(node.value)
             node.full_lock_ref -= 1
+            if node.full_lock_ref == 0:
+                self._update_full_device_leaf_status(node)
             node = node.parent
         return delta
 
@@ -1207,7 +1213,7 @@ class HiMambaRadixCache(MambaRadixCache):
                         "Failed to free host indices for prefetch %s", req_id
                     )
                 try:
-                    last_host_node.release_host()
+                    self._release_host_node(last_host_node)
                 except Exception:
                     logger.exception(
                         "Failed to release host protection for prefetch %s", req_id
@@ -1225,7 +1231,7 @@ class HiMambaRadixCache(MambaRadixCache):
         try:
             for ack_id, node in list(self.ongoing_backup.items()):
                 try:
-                    node.release_host()
+                    self._release_host_node(node)
                 except Exception:
                     logger.exception(
                         "Failed to release host protection for backup op %s", ack_id
@@ -1266,7 +1272,7 @@ class HiMambaRadixCache(MambaRadixCache):
                 info = self.ongoing_prefetch.pop(req_id, None)
                 if info is not None:
                     last_host_node, token_ids, _, _ = info
-                    last_host_node.release_host()
+                    self._release_host_node(last_host_node)
                     cc.prefetch_tokens_occupied -= len(token_ids)
                     if cc.prefetch_tokens_occupied < 0:
                         cc.prefetch_tokens_occupied = 0
@@ -1276,7 +1282,7 @@ class HiMambaRadixCache(MambaRadixCache):
                 ack_id = operation.id
                 entry = self.ongoing_backup.pop(ack_id, None)
                 if entry is not None:
-                    entry.release_host()
+                    self._release_host_node(entry)
                 if log_metrics and self.enable_storage_metrics:
                     self.storage_metrics_collector.log_backuped_tokens(
                         operation.completed_tokens
@@ -1476,7 +1482,7 @@ class HiMambaRadixCache(MambaRadixCache):
             prefix_keys,
         )
         self.ongoing_backup[operation_id] = node
-        node.protect_host()
+        self._protect_host_node(node)
 
     def prefetch_from_storage(
         self,
@@ -1497,13 +1503,13 @@ class HiMambaRadixCache(MambaRadixCache):
         ):
             return
 
-        last_host_node.protect_host()
+        self._protect_host_node(last_host_node)
         host_indices = self.cache_controller.mem_pool_host.alloc(prefetch_length)
         if host_indices is None:
             self.evict_host(prefetch_length)
             host_indices = self.cache_controller.mem_pool_host.alloc(prefetch_length)
         if host_indices is None:
-            last_host_node.release_host()
+            self._release_host_node(last_host_node)
             return
         operation = self.cache_controller.prefetch(
             req_id, host_indices, new_input_tokens, last_hash, prefix_keys
@@ -1561,7 +1567,7 @@ class HiMambaRadixCache(MambaRadixCache):
         self.cache_controller.append_host_mem_release(
             host_indices[min_completed_tokens:completed_tokens]
         )
-        last_host_node.release_host()
+        self._release_host_node(last_host_node)
         del self.ongoing_prefetch[req_id]
         self.cache_controller.prefetch_tokens_occupied -= len(token_ids)
 
@@ -1592,6 +1598,9 @@ class HiMambaRadixCache(MambaRadixCache):
             if node.evicted and not node.backuped:
                 node.host_value = host_value[:prefix_len].clone()
                 host_value_inserted = True
+                self._update_full_host_leaf_status(node)
+                if node.parent is not None:
+                    self._update_full_host_leaf_status(node.parent)
             else:
                 assert not host_value_inserted, (
                     f"matched node after host_value insertion would cause incorrect free, "
@@ -1619,6 +1628,8 @@ class HiMambaRadixCache(MambaRadixCache):
             new_node.host_value = host_value.clone()
             new_node.hash_value = hash_value
             node.children[child_key] = new_node
+            self._update_full_host_leaf_status(new_node)
+            self._update_full_host_leaf_status(node)
         return matched_length
 
     def release_aborted_request(self, rid: str):
@@ -1634,7 +1645,7 @@ class HiMambaRadixCache(MambaRadixCache):
         completed_tokens, _ = self.cache_controller.terminate_prefetch(operation)
         if self.tp_world_size > 1:
             torch.distributed.barrier(group=self.tp_group)
-        last_host_node.release_host()
+        self._release_host_node(last_host_node)
         del self.ongoing_prefetch[rid]
         self.cache_controller.append_host_mem_release(host_indices[:completed_tokens])
         self.cache_controller.prefetch_tokens_occupied -= len(token_ids)
