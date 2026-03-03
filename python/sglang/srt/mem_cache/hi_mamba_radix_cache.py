@@ -663,25 +663,6 @@ class HiMambaRadixCache(MambaRadixCache):
 
         return mamba_num_evicted
 
-    def insert(self, params: InsertParams) -> InsertResult:
-        result = super().insert(params)
-        if self.cache_controller.write_policy == "write_back" or result.prefix_len == 0:
-            return result
-
-        node = self.root_node
-        remaining = params.key
-        matched = 0
-        while matched < result.prefix_len:
-            child_key = self.get_child_key_fn(remaining)
-            child = node.children[child_key]
-            prefix_len = min(len(child.key), result.prefix_len - matched)
-            self._inc_hit_count(child)
-            matched += prefix_len
-            remaining = remaining[prefix_len:]
-            node = child
-
-        return result
-
     def _unevict_node(self, node: TreeNode, fresh_value: torch.Tensor):
         """Restore an evicted node with fresh device KV from the request."""
         n = len(fresh_value)
@@ -703,6 +684,7 @@ class HiMambaRadixCache(MambaRadixCache):
         key: RadixKey,
         value,
         mamba_value,
+        chunked: bool = False,
     ) -> Tuple[int, bool]:
         assert mamba_value is not None, "Mamba value should not be None here."
         node.last_access_time = get_last_access_time()
@@ -740,6 +722,7 @@ class HiMambaRadixCache(MambaRadixCache):
                 self._unevict_node(node, value[:prefix_len])
             else:
                 total_prefix_length += prefix_len
+                self._inc_hit_count(node, chunked)
 
             key = key[prefix_len:]
             value = value[prefix_len:]
@@ -749,7 +732,8 @@ class HiMambaRadixCache(MambaRadixCache):
 
         mamba_value_exist = False
         if len(key):
-            self._add_new_node(node, key, value, mamba_value)
+            new_node = self._add_new_node(node, key, value, mamba_value)
+            self._inc_hit_count(new_node, chunked)
         elif node.mamba_value is None:
             node.mamba_value = mamba_value
             if not node.evicted:
@@ -1018,7 +1002,7 @@ class HiMambaRadixCache(MambaRadixCache):
     def inc_lock_ref(self, node: TreeNode) -> Optional[int]:
         if self.disable:
             return 0
-            
+
         delta = 0
         if node.mamba_value is not None:
             if node.mamba_lock_ref == 0:

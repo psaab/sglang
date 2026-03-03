@@ -483,7 +483,7 @@ class MambaRadixCache(BasePrefixCache):
         if value is None:
             value = torch.tensor([x for x in key.token_ids], dtype=torch.int64)
         prefix_len, mamba_exist = self._insert_helper(
-            self.root_node, key, value, mamba_value
+            self.root_node, key, value, mamba_value, params.chunked
         )
         return InsertResult(prefix_len=prefix_len, mamba_exist=mamba_exist)
 
@@ -1089,6 +1089,7 @@ class MambaRadixCache(BasePrefixCache):
         key: RadixKey,
         value,
         mamba_value,
+        chunked: bool = False,
     ) -> Tuple[int, bool]:
         # Update the last access time from root to leaf, so that
         # mamba will tombstone the node closer to root first
