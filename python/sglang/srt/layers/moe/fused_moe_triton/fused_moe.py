@@ -54,6 +54,8 @@ elif _is_cpu and _is_cpu_amx_available:
 elif _is_hip:
     from sgl_kernel import gelu_and_mul, silu_and_mul
 
+    from sglang.srt.server_args import get_global_server_args
+
     if _use_aiter:
         try:
             from aiter import moe_sum
