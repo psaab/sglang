@@ -759,7 +759,6 @@ class HiMambaRadixCache(MambaRadixCache):
     ) -> Tuple[List[torch.Tensor], TreeNode, int]:
         """Walk tree through evicted nodes but only collect device values."""
         node = self.root_node
-        node.last_access_time = get_last_access_time()
         child_key = self.get_child_key_fn(key)
 
         value: List[torch.Tensor] = []
@@ -768,7 +767,6 @@ class HiMambaRadixCache(MambaRadixCache):
 
         while len(key) > 0 and child_key in node.children.keys():
             child = node.children[child_key]
-            child.last_access_time = get_last_access_time()
 
             if child.evicted and not child.backuped:
                 break
@@ -814,6 +812,13 @@ class HiMambaRadixCache(MambaRadixCache):
             lru_node = lru_node.parent
         self.full_lru_list.reset_node_and_parents_mru(lru_node, self.root_node)
         self.mamba_lru_list.reset_node_and_parents_mru(last_node, self.root_node)
+
+        cur_time = get_last_access_time()
+        node_update = last_node
+        while node_update:
+            node_update.last_access_time = cur_time
+            cur_time -= 0.00001
+            node_update = node_update.parent
 
         if len(value) > best_value_len:
             from sglang.srt.server_args import get_global_server_args
@@ -925,9 +930,13 @@ class HiMambaRadixCache(MambaRadixCache):
         )
 
         child.last_access_time = get_last_access_time()
+        if child.mamba_value is not None:
+            self.mamba_lru_list.remove_node(child)
         child.parent = new_node
         child.key = child.key[split_len:]
         new_node.parent.children[self.get_child_key_fn(key)] = new_node
+        if child.mamba_value is not None:
+            self.mamba_lru_list.insert_mru(child)
 
         self._update_full_host_leaf_status(new_node)
         self._update_full_host_leaf_status(child)
@@ -1593,6 +1602,8 @@ class HiMambaRadixCache(MambaRadixCache):
         while len(key) > 0 and child_key in node.children.keys():
             node = node.children[child_key]
             node.last_access_time = get_last_access_time()
+            if node != self.root_node and node.mamba_value is not None:
+                self.mamba_lru_list.reset_node_mru(node)
             prefix_len = self.key_match_fn(node.key, key)
 
             if node.evicted and not node.backuped:
