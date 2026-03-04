@@ -30,6 +30,7 @@ from sglang.multimodal_gen.runtime.pipelines_core.stages import (
     InputValidationStage,
     LatentPreparationStage,
     PipelineStage,
+    PcgPreparationStage,
     TextEncodingStage,
     TimestepPreparationStage,
 )
@@ -441,7 +442,11 @@ class ComposedPipelineBase(ABC):
                 kwargs["vae"] = vae
                 kwargs["pipeline"] = self
 
-        return self.add_stage(DenoisingStage(**kwargs))
+        denoising_stage = DenoisingStage(**kwargs)
+        # Insert PCG pre-capture as a separate stage so that DenoisingStage timing
+        # does not include CUDA graph capture overhead.
+        self.add_stage(PcgPreparationStage(denoising_stage))
+        return self.add_stage(denoising_stage)
 
     def add_standard_decoding_stage(
         self,

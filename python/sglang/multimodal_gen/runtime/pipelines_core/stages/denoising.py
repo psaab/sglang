@@ -279,7 +279,7 @@ class _DiffusionPiecewiseCudaGraphRunner:
         entry.graph.replay()
         entry.replay_count += 1
         if entry.replay_count <= 5 or entry.replay_count % 10 == 0:
-            self.logger.info(
+            self.logger.debug(
                 "[Diffusion-PCG] Replay success. tag=%s step=%d replay_count=%d",
                 capture_tag,
                 step_idx,
@@ -1427,7 +1427,11 @@ class DenoisingStage(PipelineStage):
         """
         # Prepare variables for the denoising loop
 
-        prepared_vars = self._prepare_denoising_loop(batch, server_args)
+        prepared_vars = None
+        if batch.extra is not None:
+            prepared_vars = batch.extra.pop("_denoising_prepared_vars", None)
+        if prepared_vars is None:
+            prepared_vars = self._prepare_denoising_loop(batch, server_args)
         extra_step_kwargs = prepared_vars["extra_step_kwargs"]
         target_dtype = prepared_vars["target_dtype"]
         autocast_enabled = prepared_vars["autocast_enabled"]
@@ -1461,21 +1465,6 @@ class DenoisingStage(PipelineStage):
             dtype=target_dtype,
             enabled=autocast_enabled,
         ):
-            self._maybe_prepare_piecewise_cuda_graph(
-                batch=batch,
-                server_args=server_args,
-                timesteps=timesteps,
-                timesteps_cpu=timesteps_cpu,
-                target_dtype=target_dtype,
-                image_kwargs=image_kwargs,
-                pos_cond_kwargs=pos_cond_kwargs,
-                neg_cond_kwargs=neg_cond_kwargs,
-                latents=latents,
-                boundary_timestep=boundary_timestep,
-                seq_len=seq_len,
-                reserved_frames_mask=reserved_frames_mask,
-                guidance=guidance,
-            )
             with self.progress_bar(total=num_inference_steps) as progress_bar:
                 for i, t_host in enumerate(timesteps_cpu):
                     with StageProfiler(
@@ -2181,3 +2170,53 @@ class DenoisingStage(PipelineStage):
         result = VerificationResult()
         # result.add_check("latents", batch.latents, [V.is_tensor, V.with_dims(5)])
         return result
+
+
+class PcgPreparationStage(PipelineStage):
+    def __init__(self, denoising_stage: "DenoisingStage") -> None:
+        super().__init__()
+        self.denoising_stage = denoising_stage
+
+    @torch.no_grad()
+    def forward(self, batch: Req, server_args: ServerArgs) -> Req:
+        if not getattr(server_args, "enable_piecewise_cuda_graph", False):
+            return batch
+
+        if batch.is_warmup:
+            return batch
+
+        if batch.extra is None:
+            batch.extra = {}
+
+        # Prepare once and reuse in DenoisingStage so denoising stage timing
+        # does not include PCG capture overhead.
+        prepared_vars = self.denoising_stage._prepare_denoising_loop(batch, server_args)
+        batch.extra["_denoising_prepared_vars"] = prepared_vars
+
+        target_dtype = prepared_vars["target_dtype"]
+        autocast_enabled = prepared_vars["autocast_enabled"]
+        timesteps = prepared_vars["timesteps"]
+        timesteps_cpu = timesteps.cpu()
+
+        with torch.autocast(
+            device_type=current_platform.device_type,
+            dtype=target_dtype,
+            enabled=autocast_enabled,
+        ):
+            self.denoising_stage._maybe_prepare_piecewise_cuda_graph(
+                batch=batch,
+                server_args=server_args,
+                timesteps=timesteps,
+                timesteps_cpu=timesteps_cpu,
+                target_dtype=target_dtype,
+                image_kwargs=prepared_vars["image_kwargs"],
+                pos_cond_kwargs=prepared_vars["pos_cond_kwargs"],
+                neg_cond_kwargs=prepared_vars["neg_cond_kwargs"],
+                latents=prepared_vars["latents"],
+                boundary_timestep=prepared_vars["boundary_timestep"],
+                seq_len=prepared_vars["seq_len"],
+                reserved_frames_mask=prepared_vars["reserved_frames_mask"],
+                guidance=prepared_vars["guidance"],
+            )
+
+        return batch
