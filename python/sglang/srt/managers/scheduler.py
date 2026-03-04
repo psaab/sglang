@@ -1673,15 +1673,14 @@ class Scheduler(
     def _prefetch_kvcache(self, req: Req):
         if self.enable_hicache_storage:
             req.init_next_round_input(self.tree_cache, cow_mamba=False)
-            if req.last_node.backuped:
-                # only to initiate the prefetch if the last node is backuped
-                # otherwise, the allocated GPU memory must be locked for integrity
+            if req.last_host_node.backuped:
+                # only to initiate the prefetch if the last host node is backuped
                 last_hash = req.last_host_node.get_last_hash_value()
                 matched_len = len(req.prefix_indices) + req.host_hit_length
                 new_input_tokens = req.fill_ids[matched_len:]
 
                 prefix_keys = (
-                    req.last_node.get_prefix_hash_values(req.last_node.parent)
+                    req.last_host_node.get_prefix_hash_values(req.last_host_node.parent)
                     if self.tree_cache.hicache_storage_pass_prefix_keys
                     else None
                 )
