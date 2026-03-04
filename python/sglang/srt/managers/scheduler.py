@@ -1673,8 +1673,10 @@ class Scheduler(
     def _prefetch_kvcache(self, req: Req):
         if self.enable_hicache_storage:
             req.init_next_round_input(self.tree_cache, cow_mamba=False)
-            if req.last_host_node.backuped:
-                # only to initiate the prefetch if the last host node is backuped
+            if (
+                req.last_host_node.backuped
+                or req.last_host_node is self.tree_cache.root_node
+            ):
                 last_hash = req.last_host_node.get_last_hash_value()
                 matched_len = len(req.prefix_indices) + req.host_hit_length
                 new_input_tokens = req.fill_ids[matched_len:]
