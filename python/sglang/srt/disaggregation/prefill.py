@@ -52,6 +52,7 @@ from sglang.srt.mem_cache.common import release_kv_cache
 from sglang.srt.mem_cache.memory_pool import HybridLinearKVPool, NSATokenToKVPool
 from sglang.srt.mem_cache.swa_memory_pool import SWAKVPool
 from sglang.srt.observability.req_time_stats import set_schedule_time_batch
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 
 if TYPE_CHECKING:
     from torch.distributed import ProcessGroup
@@ -218,7 +219,7 @@ class PrefillBootstrapQueue:
 
         req.disagg_kv_sender = kv_sender_class(
             mgr=self.kv_manager,
-            bootstrap_addr=f"{req.bootstrap_host}:{self.bootstrap_port}",
+            bootstrap_addr=f"{maybe_wrap_ipv6_address(req.bootstrap_host)}:{self.bootstrap_port}",
             bootstrap_room=req.bootstrap_room,
             dest_tp_ranks=dest_tp_ranks,
             pp_rank=self.pp_rank,
