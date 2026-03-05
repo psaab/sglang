@@ -248,18 +248,36 @@ class MooncakeKVManager(CommonKVManager):
     def register_buffer_to_engine(self):
         # Batch register KV data buffers
         if self.kv_args.kv_data_ptrs and self.kv_args.kv_data_lens:
+            logger.info(
+                "Registering KV data buffers: num=%d, ptrs=[%s], lens=[%s]",
+                len(self.kv_args.kv_data_ptrs),
+                ", ".join(f"0x{p:x}" for p in self.kv_args.kv_data_ptrs[:4]),
+                ", ".join(str(l) for l in self.kv_args.kv_data_lens[:4]),
+            )
             self.engine.batch_register(
                 self.kv_args.kv_data_ptrs, self.kv_args.kv_data_lens
             )
 
         # Batch register auxiliary data buffers
         if self.kv_args.aux_data_ptrs and self.kv_args.aux_data_lens:
+            logger.info(
+                "Registering aux data buffers: num=%d, ptrs=[%s], lens=[%s]",
+                len(self.kv_args.aux_data_ptrs),
+                ", ".join(f"0x{p:x}" for p in self.kv_args.aux_data_ptrs[:4]),
+                ", ".join(str(l) for l in self.kv_args.aux_data_lens[:4]),
+            )
             self.engine.batch_register(
                 self.kv_args.aux_data_ptrs, self.kv_args.aux_data_lens
             )
 
         # Batch register state/extra pool data buffers
         if self.kv_args.state_data_ptrs and self.kv_args.state_data_lens:
+            logger.info(
+                "Registering state data buffers: num=%d, ptrs=[%s], lens=[%s]",
+                len(self.kv_args.state_data_ptrs),
+                ", ".join(f"0x{p:x}" for p in self.kv_args.state_data_ptrs[:4]),
+                ", ".join(str(l) for l in self.kv_args.state_data_lens[:4]),
+            )
             self.engine.batch_register(
                 self.kv_args.state_data_ptrs, self.kv_args.state_data_lens
             )
@@ -269,9 +287,28 @@ class MooncakeKVManager(CommonKVManager):
             return 0
 
         src_addrs, dst_addrs, lengths = zip(*transfer_blocks)
-        return self.engine.batch_transfer_sync(
+        ret = self.engine.batch_transfer_sync(
             mooncake_session_id, list(src_addrs), list(dst_addrs), list(lengths)
         )
+        if ret != 0:
+            # Log address ranges to help debug "address not found" errors
+            for i, (src, dst, length) in enumerate(transfer_blocks[:5]):
+                logger.error(
+                    "  transfer_block[%d]: src=0x%x..0x%x, dst=0x%x..0x%x, "
+                    "length=%d",
+                    i,
+                    src,
+                    src + length,
+                    dst,
+                    dst + length,
+                    length,
+                )
+            if len(transfer_blocks) > 5:
+                logger.error(
+                    "  ... and %d more transfer blocks",
+                    len(transfer_blocks) - 5,
+                )
+        return ret
 
     def _send_kvcache_generic(
         self,
@@ -335,6 +372,19 @@ class MooncakeKVManager(CommonKVManager):
                 for layer_id in range(layers_current_pp_stage)
             ]
         assert layers_params is not None
+        logger.debug(
+            "send_kvcache: session=%s, num_layers=%d, "
+            "num_prefill_blocks=%d, num_dst_blocks=%d, "
+            "base_ptrs=[%s]",
+            mooncake_session_id,
+            len(layers_params),
+            len(prefill_kv_blocks),
+            len(dst_kv_blocks),
+            ", ".join(
+                f"(src=0x{s:x}, dst=0x{d:x}, item_len={l})"
+                for s, d, l in layers_params[:3]
+            ),
+        )
 
         def set_transfer_blocks(
             src_ptr: int, dst_ptr: int, item_len: int
@@ -868,14 +918,14 @@ class MooncakeKVManager(CommonKVManager):
                                     logger.error(
                                         "Session %s failed: ret=%d, "
                                         "endpoint=%s, dst_port=%s, "
-                                        "room=%s, chunk_idx=%d, "
+                                        "room=%s, index_slice=%s, "
                                         "is_last=%s, num_failures=%d",
                                         req.mooncake_session_id,
                                         ret,
                                         maybe_wrap_ipv6_address(req.endpoint),
                                         req.dst_port,
                                         kv_chunk.room,
-                                        kv_chunk_idx,
+                                        kv_chunk.index_slice,
                                         kv_chunk.is_last_chunk,
                                         self.session_failures[
                                             req.mooncake_session_id
