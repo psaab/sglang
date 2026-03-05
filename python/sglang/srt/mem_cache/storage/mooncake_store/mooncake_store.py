@@ -387,7 +387,7 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
                     f"transfer_engine={'shared' if transfer_engine is not None else 'new'}"
                 )
                 ret_code = self.store.setup(
-                    client_hostname,
+                    f'[{client_hostname}]',
                     self.config.metadata_server,
                     per_tp_global_segment_size,
                     DEFAULT_LOCAL_BUFFER_SIZE,  # Zero copy interface does not need local buffer
