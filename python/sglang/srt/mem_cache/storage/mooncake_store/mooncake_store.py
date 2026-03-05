@@ -436,8 +436,10 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
             raise
 
     def check_server(self):
-        master_server_ip = self.config.master_server_address.split(":")[0]
-        segments_url = f"http://{master_server_ip}:{self.config.master_metrics_port}/get_all_segments"
+        from sglang.srt.utils.common import maybe_wrap_ipv6_address, parse_host_port
+
+        master_server_ip, _ = parse_host_port(self.config.master_server_address)
+        segments_url = f"http://{maybe_wrap_ipv6_address(master_server_ip)}:{self.config.master_metrics_port}/get_all_segments"
         start_time = time.perf_counter()
 
         check_result = False

@@ -9,6 +9,7 @@ import torch.distributed as dist
 
 from sglang.srt.connector import BaseConnector
 from sglang.srt.utils import init_custom_process_group
+from sglang.srt.utils.common import format_tcp_address
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class RemoteInstanceConnector(BaseConnector):
         try:
             self._model_update_group = init_custom_process_group(
                 backend=backend,
-                init_method=f"tcp://{master_address}:{master_port}",
+                init_method=format_tcp_address(master_address, master_port),
                 world_size=world_size,
                 rank=group_rank,
                 group_name=group_name,

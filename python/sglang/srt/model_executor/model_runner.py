@@ -174,6 +174,11 @@ from sglang.srt.utils import (
     set_cuda_arch,
     slow_rank_detector,
 )
+from sglang.srt.utils.common import (
+    format_tcp_address,
+    maybe_wrap_ipv6_address,
+    parse_host_port,
+)
 from sglang.srt.utils.nvtx_pytorch_hooks import PytHooks
 from sglang.srt.utils.offloader import (
     create_offloader_from_server_args,
@@ -776,9 +781,12 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         if dist_init_method_override:
             dist_init_method = dist_init_method_override
         elif self.server_args.dist_init_addr:
-            dist_init_method = f"tcp://{self.server_args.dist_init_addr}"
+            host, port = parse_host_port(self.server_args.dist_init_addr)
+            dist_init_method = format_tcp_address(host, port)
         else:
-            dist_init_method = f"tcp://127.0.0.1:{self.dist_port}"
+            dist_init_method = format_tcp_address(
+                self.server_args.host or "::1", self.dist_port
+            )
         set_custom_all_reduce(not self.server_args.disable_custom_all_reduce)
         set_mscclpp_all_reduce(self.server_args.enable_mscclpp)
         set_torch_symm_mem_all_reduce(self.server_args.enable_torch_symm_mem)
@@ -1229,7 +1237,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         try:
             self._weights_send_group[group_name] = init_custom_process_group(
                 backend=backend,
-                init_method=f"tcp://{master_address}:{group_port}",
+                init_method=format_tcp_address(master_address, group_port),
                 world_size=world_size,
                 rank=group_rank,
                 group_name=group_name,
@@ -1328,7 +1336,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         try:
             self._model_update_group[group_name] = init_custom_process_group(
                 backend=backend,
-                init_method=f"tcp://{master_address}:{master_port}",
+                init_method=format_tcp_address(master_address, master_port),
                 world_size=world_size,
                 rank=rank,
                 group_name=group_name,
