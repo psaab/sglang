@@ -35,7 +35,11 @@ from sglang.srt.disaggregation.utils import (
 from sglang.srt.distributed.parallel_state import get_mooncake_transfer_engine
 from sglang.srt.environ import envs
 from sglang.srt.server_args import ServerArgs
-from sglang.srt.utils import format_tcp_address, is_valid_ipv6_address
+from sglang.srt.utils import (
+    format_tcp_address,
+    is_valid_ipv6_address,
+    maybe_wrap_ipv6_address,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -853,11 +857,25 @@ class MooncakeKVManager(CommonKVManager):
                                 if self.session_failures[req.mooncake_session_id] >= 1:
                                     self.failed_sessions.add(req.mooncake_session_id)
                                     logger.error(
-                                        f"Session {req.mooncake_session_id} failed."
+                                        "Session %s failed: ret=%d, "
+                                        "endpoint=%s, dst_port=%s, "
+                                        "room=%s, chunk_idx=%d, "
+                                        "is_last=%s, num_failures=%d",
+                                        req.mooncake_session_id,
+                                        ret,
+                                        maybe_wrap_ipv6_address(req.endpoint),
+                                        req.dst_port,
+                                        kv_chunk.room,
+                                        kv_chunk_idx,
+                                        kv_chunk.is_last_chunk,
+                                        self.session_failures[
+                                            req.mooncake_session_id
+                                        ],
                                     )
                             self.record_failure(
                                 kv_chunk.room,
-                                f"Failed to send kv chunk of {kv_chunk.room} to {req.endpoint}:{req.dst_port}",
+                                f"Failed to send kv chunk of {kv_chunk.room} to "
+                                f"{maybe_wrap_ipv6_address(req.endpoint)}:{req.dst_port}",
                             )
                             self.update_status(kv_chunk.room, KVPoll.Failed)
                             self.sync_status_to_decode_endpoint(
