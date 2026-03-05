@@ -304,6 +304,12 @@ class MooncakeStore(HiCacheStorage):
                         "Please set standalone_storage=False "
                         "or upgrade Mooncake by 'pip install mooncake --upgrade'."
                     )
+                logger.info(
+                    "Setting up Mooncake store (standalone) with "
+                    f"segment_size={mem_pool.size * mem_pool.size_per_token}, "
+                    f"local_buffer_size={DEFAULT_LOCAL_BUFFER_SIZE}, "
+                    f"client_server_address={self.config.client_server_address}"
+                )
                 ret_code = self.store.setup_dummy(
                     mem_pool.size * mem_pool.size_per_token,
                     DEFAULT_LOCAL_BUFFER_SIZE,  # Zero copy interface does not need local buffer
@@ -342,6 +348,17 @@ class MooncakeStore(HiCacheStorage):
                     client_hostname = self.config.local_hostname
                     transfer_engine = None
 
+                logger.info(
+                    "Setting up Mooncake store with "
+                    f"client_hostname={client_hostname}, "
+                    f"metadata_server={self.config.metadata_server}, "
+                    f"global_segment_size={per_tp_global_segment_size}, "
+                    f"local_buffer_size={DEFAULT_LOCAL_BUFFER_SIZE}, "
+                    f"protocol={self.config.protocol}, "
+                    f"device_name={device_name}, "
+                    f"master_server_address={self.config.master_server_address}, "
+                    f"transfer_engine={'shared' if transfer_engine is not None else 'new'}"
+                )
                 ret_code = self.store.setup(
                     client_hostname,
                     self.config.metadata_server,
