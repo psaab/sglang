@@ -304,6 +304,12 @@ class MooncakeStore(HiCacheStorage):
                         "Please set standalone_storage=False "
                         "or upgrade Mooncake by 'pip install mooncake --upgrade'."
                     )
+                logger.info(
+                    "Setting up Mooncake store (standalone) with "
+                    f"segment_size={mem_pool.size * mem_pool.size_per_token}, "
+                    f"local_buffer_size={DEFAULT_LOCAL_BUFFER_SIZE}, "
+                    f"client_server_address={self.config.client_server_address}"
+                )
                 ret_code = self.store.setup_dummy(
                     mem_pool.size * mem_pool.size_per_token,
                     DEFAULT_LOCAL_BUFFER_SIZE,  # Zero copy interface does not need local buffer
@@ -339,9 +345,24 @@ class MooncakeStore(HiCacheStorage):
                         f"Reuse initialized mooncake transfer engine: {self._shared_mooncake_transfer_engine}"
                     )
                 else:
-                    client_hostname = self.config.local_hostname
+                    from sglang.srt.utils.common import maybe_wrap_ipv6_address
+
+                    client_hostname = maybe_wrap_ipv6_address(
+                        self.config.local_hostname
+                    )
                     transfer_engine = None
 
+                logger.info(
+                    "Setting up Mooncake store with "
+                    f"client_hostname={client_hostname}, "
+                    f"metadata_server={self.config.metadata_server}, "
+                    f"global_segment_size={per_tp_global_segment_size}, "
+                    f"local_buffer_size={DEFAULT_LOCAL_BUFFER_SIZE}, "
+                    f"protocol={self.config.protocol}, "
+                    f"device_name={device_name}, "
+                    f"master_server_address={self.config.master_server_address}, "
+                    f"transfer_engine={'shared' if transfer_engine is not None else 'new'}"
+                )
                 ret_code = self.store.setup(
                     client_hostname,
                     self.config.metadata_server,
@@ -394,8 +415,10 @@ class MooncakeStore(HiCacheStorage):
             raise
 
     def check_server(self):
-        master_server_ip = self.config.master_server_address.split(":")[0]
-        segments_url = f"http://{master_server_ip}:{self.config.master_metrics_port}/get_all_segments"
+        from sglang.srt.utils.common import maybe_wrap_ipv6_address, parse_host_port
+
+        master_server_ip, _ = parse_host_port(self.config.master_server_address)
+        segments_url = f"http://{maybe_wrap_ipv6_address(master_server_ip)}:{self.config.master_metrics_port}/get_all_segments"
         start_time = time.perf_counter()
 
         check_result = False
