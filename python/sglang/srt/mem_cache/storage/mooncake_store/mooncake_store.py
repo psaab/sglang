@@ -372,7 +372,11 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
                         f"Reuse initialized mooncake transfer engine: {self._shared_mooncake_transfer_engine}"
                     )
                 else:
-                    client_hostname = self.config.local_hostname
+                    from sglang.srt.utils.common import maybe_wrap_ipv6_address
+
+                    client_hostname = maybe_wrap_ipv6_address(
+                        self.config.local_hostname
+                    )
                     transfer_engine = None
 
                 logger.info(
@@ -387,7 +391,7 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
                     f"transfer_engine={'shared' if transfer_engine is not None else 'new'}"
                 )
                 ret_code = self.store.setup(
-                    f'[{client_hostname}]',
+                    client_hostname,
                     self.config.metadata_server,
                     per_tp_global_segment_size,
                     DEFAULT_LOCAL_BUFFER_SIZE,  # Zero copy interface does not need local buffer
