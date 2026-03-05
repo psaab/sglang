@@ -111,6 +111,7 @@ from sglang.srt.utils import (
     is_npu,
     is_pin_memory_available,
     rank0_log,
+    resolve_hostname,
     set_weight_attrs,
 )
 
@@ -2157,7 +2158,7 @@ class RemoteInstanceModelLoader(BaseModelLoader):
         self, model, client, model_config: ModelConfig, device_config: DeviceConfig
     ) -> nn.Module:
         load_config = self.load_config
-        instance_ip = socket.gethostbyname(socket.gethostname())
+        instance_ip = resolve_hostname(socket.gethostname())
         start_build_group_tic = time.time()
         client.build_group(
             gpu_id=device_config.gpu_id,
