@@ -1648,51 +1648,53 @@ def run_benchmark(args_: argparse.Namespace):
             "truss": 8080,
         }.get(args.backend, 30000)
 
+    # Wrap IPv6 addresses in brackets for URL construction
+    _host = f"[{args.host}]" if ":" in args.host else args.host
+    _host_base = f"http://{_host}:{args.port}"
+
     model_url = (
         f"{args.base_url}/v1/models"
         if args.base_url
-        else f"http://{args.host}:{args.port}/v1/models"
+        else f"{_host_base}/v1/models"
     )
 
     if args.backend in ["sglang", "sglang-native"]:
         api_url = (
             f"{args.base_url}/generate"
             if args.base_url
-            else f"http://{args.host}:{args.port}/generate"
+            else f"{_host_base}/generate"
         )
     elif args.backend in ["sglang-oai", "vllm", "lmdeploy"]:
         api_url = (
             f"{args.base_url}/v1/completions"
             if args.base_url
-            else f"http://{args.host}:{args.port}/v1/completions"
+            else f"{_host_base}/v1/completions"
         )
     elif args.backend in ["sglang-oai-chat", "vllm-chat", "lmdeploy-chat"]:
         api_url = (
             f"{args.base_url}/v1/chat/completions"
             if args.base_url
-            else f"http://{args.host}:{args.port}/v1/chat/completions"
+            else f"{_host_base}/v1/chat/completions"
         )
     elif args.backend == "trt":
         api_url = (
             f"{args.base_url}/v2/models/ensemble/generate_stream"
             if args.base_url
-            else f"http://{args.host}:{args.port}/v2/models/ensemble/generate_stream"
+            else f"{_host_base}/v2/models/ensemble/generate_stream"
         )
         if args.model is None:
             print("Please provide a model using `--model` when using `trt` backend.")
             sys.exit(1)
     elif args.backend == "gserver":
-        api_url = args.base_url if args.base_url else f"{args.host}:{args.port}"
+        api_url = args.base_url if args.base_url else f"{_host}:{args.port}"
         args.model = args.model or "default"
     elif args.backend == "truss":
         api_url = (
             f"{args.base_url}/v1/models/model:predict"
             if args.base_url
-            else f"http://{args.host}:{args.port}/v1/models/model:predict"
+            else f"{_host_base}/v1/models/model:predict"
         )
-    base_url = (
-        f"http://{args.host}:{args.port}" if args.base_url is None else args.base_url
-    )
+    base_url = _host_base if args.base_url is None else args.base_url
 
     # Wait for server to be ready
     if args.ready_check_timeout_sec > 0:

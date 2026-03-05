@@ -14,6 +14,7 @@ from mindspore._c_expression import GroupOptions
 from mindspore.communication import create_group
 
 from sglang.srt.distributed.parallel_state import _groups
+from sglang.srt.utils.common import format_tcp_address, parse_host_port
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +108,10 @@ def reuse_hccl_comm():
 
 def init_ms_distributed(world_size, rank, local_rank, server_args, port):
     if server_args.dist_init_addr:
-        dist_init_method = f"tcp://{server_args.dist_init_addr}"
+        host, p = parse_host_port(server_args.dist_init_addr)
+        dist_init_method = format_tcp_address(host, p)
     else:
-        dist_init_method = f"tcp://{server_args.host}:{port}"
+        dist_init_method = format_tcp_address(server_args.host or "::1", port)
     set_ms_parallel_env(rank, local_rank, world_size, dist_init_method)
 
     ms.set_context(infer_boost="on", jit_level="O0")

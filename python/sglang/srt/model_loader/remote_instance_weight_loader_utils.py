@@ -9,6 +9,8 @@ from typing import List
 
 import requests
 
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +25,7 @@ def trigger_init_weights_send_group_for_remote_instance_request(
     remote_instance_weight_loader_send_weights_group_ports: List[int],
     remote_instance_weight_loader_client_id: str,
 ):
-    seed_instance_service_url = f"http://{remote_instance_weight_loader_seed_instance_ip}:{remote_instance_weight_loader_seed_instance_service_port}"
+    seed_instance_service_url = f"http://{maybe_wrap_ipv6_address(remote_instance_weight_loader_seed_instance_ip)}:{remote_instance_weight_loader_seed_instance_service_port}"
     # Only support loading weights from instance with same parallelism strategy.
     # Per TP rank pair between seed and dst instances will build a communication group for sending weights.
     # i.e. seed TP 0 <-> dst TP 0, seed TP 1 <-> dst TP 1, etc.
@@ -58,7 +60,7 @@ def trigger_transferring_weights_request(
     remote_instance_weight_loader_send_weights_group_ports: List[int],
     remote_instance_weight_loader_client_id: str,
 ):
-    seed_instance_service_url = f"http://{remote_instance_weight_loader_seed_instance_ip}:{remote_instance_weight_loader_seed_instance_service_port}"
+    seed_instance_service_url = f"http://{maybe_wrap_ipv6_address(remote_instance_weight_loader_seed_instance_ip)}:{remote_instance_weight_loader_seed_instance_service_port}"
     try:
         requests.post(
             f"{seed_instance_service_url}/send_weights_to_remote_instance",

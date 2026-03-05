@@ -680,7 +680,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             local_ip, "P2PHANDSHAKE", "rdma", envs.MOONCAKE_DEVICE.get()
         )
         self.remote_instance_transfer_engine_session_id = (
-            f"{local_ip}:{self.remote_instance_transfer_engine.get_rpc_port()}"
+            f"{maybe_wrap_ipv6_address(local_ip)}:{self.remote_instance_transfer_engine.get_rpc_port()}"
         )
 
     def model_specific_adjustment(self):
@@ -1237,7 +1237,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         try:
             self._weights_send_group[group_name] = init_custom_process_group(
                 backend=backend,
-                init_method=f"tcp://{master_address}:{group_port}",
+                init_method=format_tcp_address(master_address, group_port),
                 world_size=world_size,
                 rank=group_rank,
                 group_name=group_name,
@@ -1246,7 +1246,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             dist.barrier(group=self._weights_send_group[group_name])
             success = True
             message = (
-                f"Succeeded to init group through {master_address}:{group_port} group."
+                f"Succeeded to init group through {maybe_wrap_ipv6_address(master_address)}:{group_port} group."
             )
         except Exception as e:
             message = f"Failed to init group: {e}."
@@ -1291,7 +1291,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
                     group=send_group,
                 )
             success = True
-            message = f"Succeeded to send weights through {master_address}:{group_port} {group_name}."
+            message = f"Succeeded to send weights through {maybe_wrap_ipv6_address(master_address)}:{group_port} {group_name}."
         except Exception as e:
             message = f"Failed to send weights: {e}."
             logger.error(message)
@@ -1336,7 +1336,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         try:
             self._model_update_group[group_name] = init_custom_process_group(
                 backend=backend,
-                init_method=f"tcp://{master_address}:{master_port}",
+                init_method=format_tcp_address(master_address, master_port),
                 world_size=world_size,
                 rank=rank,
                 group_name=group_name,

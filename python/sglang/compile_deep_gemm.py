@@ -25,6 +25,7 @@ from sglang.srt.managers.io_struct import GenerateReqInput
 from sglang.srt.managers.tokenizer_manager import TokenizerManager
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils import kill_process_tree
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 
 multiprocessing.set_start_method("spawn", force=True)
 
@@ -87,7 +88,7 @@ def launch_server_process_and_send_one_request(
 ):
     proc = multiprocessing.Process(target=launch_server_internal, args=(server_args,))
     proc.start()
-    base_url = f"http://{server_args.host}:{server_args.port}"
+    base_url = f"http://{maybe_wrap_ipv6_address(server_args.host)}:{server_args.port}"
     timeout = compile_args.timeout
 
     start_time = time.perf_counter()
