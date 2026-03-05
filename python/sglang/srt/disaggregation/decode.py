@@ -62,6 +62,7 @@ from sglang.srt.mem_cache.memory_pool import (
 from sglang.srt.mem_cache.swa_memory_pool import SWAKVPool
 from sglang.srt.tracing.trace import trace_event_batch, trace_slice_end
 from sglang.srt.utils import get_int_env_var
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 from sglang.srt.utils.torch_memory_saver_adapter import TorchMemorySaverAdapter
 
 logger = logging.getLogger(__name__)
@@ -360,7 +361,7 @@ class DecodePreallocQueue:
 
             kv_receiver = kv_receiver_class(
                 mgr=self.kv_manager,
-                bootstrap_addr=f"{req.bootstrap_host}:{req.bootstrap_port}",
+                bootstrap_addr=f"{maybe_wrap_ipv6_address(req.bootstrap_host)}:{req.bootstrap_port}",
                 bootstrap_room=req.bootstrap_room,
                 prefill_dp_rank=req.data_parallel_rank,
             )
