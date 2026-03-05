@@ -248,7 +248,7 @@ class MooncakeKVManager(CommonKVManager):
     def register_buffer_to_engine(self):
         # Batch register KV data buffers
         if self.kv_args.kv_data_ptrs and self.kv_args.kv_data_lens:
-            logger.info(
+            logger.warning(
                 "Registering KV data buffers: num=%d, ptrs=[%s], lens=[%s]",
                 len(self.kv_args.kv_data_ptrs),
                 ", ".join(f"0x{p:x}" for p in self.kv_args.kv_data_ptrs[:4]),
@@ -260,7 +260,7 @@ class MooncakeKVManager(CommonKVManager):
 
         # Batch register auxiliary data buffers
         if self.kv_args.aux_data_ptrs and self.kv_args.aux_data_lens:
-            logger.info(
+            logger.warning(
                 "Registering aux data buffers: num=%d, ptrs=[%s], lens=[%s]",
                 len(self.kv_args.aux_data_ptrs),
                 ", ".join(f"0x{p:x}" for p in self.kv_args.aux_data_ptrs[:4]),
@@ -272,7 +272,7 @@ class MooncakeKVManager(CommonKVManager):
 
         # Batch register state/extra pool data buffers
         if self.kv_args.state_data_ptrs and self.kv_args.state_data_lens:
-            logger.info(
+            logger.warning(
                 "Registering state data buffers: num=%d, ptrs=[%s], lens=[%s]",
                 len(self.kv_args.state_data_ptrs),
                 ", ".join(f"0x{p:x}" for p in self.kv_args.state_data_ptrs[:4]),
@@ -372,7 +372,7 @@ class MooncakeKVManager(CommonKVManager):
                 for layer_id in range(layers_current_pp_stage)
             ]
         assert layers_params is not None
-        logger.debug(
+        logger.warning(
             "send_kvcache: session=%s, num_layers=%d, "
             "num_prefill_blocks=%d, num_dst_blocks=%d, "
             "base_ptrs=[%s]",
@@ -621,7 +621,7 @@ class MooncakeKVManager(CommonKVManager):
         data: bytes,
     ):
         endpoint = format_tcp_address(remote, dst_port)
-        logger.debug(
+        logger.warning(
             "Sending aux data: endpoint=%s, room=%s, "
             "buffer_index=%d, aux_index=%d, data_len=%d",
             endpoint,
@@ -645,7 +645,7 @@ class MooncakeKVManager(CommonKVManager):
                     data,
                 ]
             )
-            logger.debug("Sent aux data: endpoint=%s, room=%s", endpoint, room)
+            logger.warning("Sent aux data: endpoint=%s, room=%s", endpoint, room)
         except Exception as e:
             logger.error(
                 "Failed to send aux data: endpoint=%s, room=%s, "
@@ -851,7 +851,7 @@ class MooncakeKVManager(CommonKVManager):
         self, remote: str, dst_port: int, room: int, status: int, prefill_rank: int
     ):
         endpoint = format_tcp_address(remote, dst_port)
-        logger.debug(
+        logger.warning(
             "Syncing status to decode: endpoint=%s, room=%s, "
             "status=%d, prefill_rank=%d",
             endpoint,
@@ -869,7 +869,7 @@ class MooncakeKVManager(CommonKVManager):
                     str(prefill_rank).encode("ascii"),
                 ]
             )
-            logger.debug(
+            logger.warning(
                 "Synced status to decode: endpoint=%s, room=%s", endpoint, room
             )
         except Exception as e:
@@ -1437,7 +1437,7 @@ class MooncakeKVReceiver(CommonKVReceiver):
             sock, lock = self._connect_to_bootstrap_server(bootstrap_info)
             bootstrap_addr = bootstrap_info.get("bootstrap_addr", "unknown")
             with lock:
-                logger.debug(
+                logger.warning(
                     "Sending decode registration: bootstrap=%s, "
                     "local_ip=%s, rank_port=%d, session_id=%s, "
                     "tp_rank=%d, attn_tp_size=%d, kv_item_len=%d",
@@ -1466,7 +1466,7 @@ class MooncakeKVReceiver(CommonKVReceiver):
                             packed_state_dim_per_tensor,
                         ]
                     )
-                    logger.debug(
+                    logger.warning(
                         "Sent decode registration: bootstrap=%s, "
                         "session_id=%s",
                         bootstrap_addr,
@@ -1502,7 +1502,7 @@ class MooncakeKVReceiver(CommonKVReceiver):
             bootstrap_addr = bootstrap_info.get("bootstrap_addr", "unknown")
 
             with lock:
-                logger.debug(
+                logger.warning(
                     "Sending decode init: bootstrap=%s, "
                     "room=%s, session_id=%s, "
                     "is_dummy=%s, num_kv_indices=%d",
@@ -1532,7 +1532,7 @@ class MooncakeKVReceiver(CommonKVReceiver):
                             str(self.required_dst_info_num).encode("ascii"),
                         ]
                     )
-                    logger.debug(
+                    logger.warning(
                         "Sent decode init: bootstrap=%s, room=%s",
                         bootstrap_addr,
                         self.bootstrap_room,
