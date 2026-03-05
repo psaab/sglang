@@ -288,7 +288,7 @@ class ServerArgs:
     master_port: int | None = None
 
     # http server endpoint config
-    host: str | None = "127.0.0.1"
+    host: str | None = "::1"
     port: int | None = 30000
 
     # TODO: webui and their endpoint, check if webui_port is available.
@@ -916,12 +916,14 @@ class ServerArgs:
     def scheduler_endpoint(self):
         """
         Internal endpoint for scheduler.
-        Prefers the configured host but normalizes localhost -> 127.0.0.1 to avoid ZMQ issues.
+        Prefers the configured host but normalizes localhost -> ::1 to avoid ZMQ issues.
         """
+        from sglang.srt.utils.common import format_tcp_address
+
         scheduler_host = self.host
         if scheduler_host is None or scheduler_host == "localhost":
-            scheduler_host = "127.0.0.1"
-        return f"tcp://{scheduler_host}:{self.scheduler_port}"
+            scheduler_host = "::1"
+        return format_tcp_address(scheduler_host, self.scheduler_port)
 
     def settle_port(
         self, port: int, port_inc: int = 42, max_attempts: int = 100

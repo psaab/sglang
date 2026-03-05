@@ -302,7 +302,7 @@ class ServerArgs:
     model_impl: str = "auto"
 
     # HTTP server
-    host: str = "127.0.0.1"
+    host: str = "::1"
     port: int = 30000
     fastapi_root_path: str = ""
     grpc_mode: bool = False
