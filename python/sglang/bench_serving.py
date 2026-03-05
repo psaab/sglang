@@ -49,6 +49,7 @@ from transformers import (
     PreTrainedTokenizerBase,
     PreTrainedTokenizerFast,
 )
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 
 ASSISTANT_SUFFIX = "Assistant:"
 _ROUTING_KEY_HEADER = "X-SMG-Routing-Key"
@@ -2841,7 +2842,7 @@ def run_benchmark(args_: argparse.Namespace):
         }.get(args.backend, 30000)
 
     # Wrap IPv6 addresses in brackets for URL construction
-    _host = f"[{args.host}]" if ":" in args.host else args.host
+    _host = maybe_wrap_ipv6_address(args.host)
     _host_base = f"http://{_host}:{args.port}"
 
     model_url = (
