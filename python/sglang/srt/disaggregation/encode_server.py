@@ -659,6 +659,8 @@ class MMEncoder:
         def send_with_socket():
             sock = self.sync_context.socket(zmq.PUSH)
             config_socket(sock, zmq.PUSH)
+            if "[" in endpoint:
+                sock.setsockopt(zmq.IPV6, 1)
             try:
                 sock.connect(endpoint)
                 if buffer is not None:
