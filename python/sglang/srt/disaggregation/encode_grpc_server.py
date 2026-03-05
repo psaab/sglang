@@ -27,7 +27,12 @@ from sglang.srt.disaggregation.encode_server import (
     launch_encoder,
 )
 from sglang.srt.server_args import PortArgs, ServerArgs
-from sglang.srt.utils import get_zmq_socket, random_uuid
+from sglang.srt.utils import (
+    format_tcp_address,
+    get_zmq_socket,
+    parse_host_port,
+    random_uuid,
+)
 
 logger = logging.getLogger(__name__)
 SGLangEncoderServicer = sglang_encoder_pb2_grpc.SglangEncoderServicer
@@ -208,9 +213,12 @@ async def serve_grpc_encoder(server_args: ServerArgs):
     port_args = PortArgs.init_new(server_args)
 
     if server_args.dist_init_addr:
-        dist_init_method = f"tcp://{server_args.dist_init_addr}"
+        host, port = parse_host_port(server_args.dist_init_addr)
+        dist_init_method = format_tcp_address(host, port)
     else:
-        dist_init_method = f"tcp://127.0.0.1:{port_args.nccl_port}"
+        dist_init_method = format_tcp_address(
+            server_args.host or "::1", port_args.nccl_port
+        )
 
     send_sockets: List[zmq.Socket] = []
     for rank in range(1, server_args.tp_size):

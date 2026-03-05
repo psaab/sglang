@@ -44,11 +44,13 @@ from sglang.srt.server_args import (
 )
 from sglang.srt.utils import (
     config_socket,
+    format_tcp_address,
     get_local_ip_auto,
     get_zmq_socket,
     load_audio,
     load_image,
     load_video,
+    parse_host_port,
     random_uuid,
 )
 
@@ -926,9 +928,12 @@ def launch_server(server_args: ServerArgs):
     ipc_path_prefix = random_uuid()
     port_args = PortArgs.init_new(server_args)
     if server_args.dist_init_addr:
-        dist_init_method = f"tcp://{server_args.dist_init_addr}"
+        host, port = parse_host_port(server_args.dist_init_addr)
+        dist_init_method = format_tcp_address(host, port)
     else:
-        dist_init_method = f"tcp://127.0.0.1:{port_args.nccl_port}"
+        dist_init_method = format_tcp_address(
+            server_args.host or "::1", port_args.nccl_port
+        )
     for rank in range(1, server_args.tp_size):
         schedule_path = f"ipc:///tmp/{ipc_path_prefix}_schedule_{rank}"
         send_sockets.append(
