@@ -903,9 +903,24 @@ class MooncakeKVManager(CommonKVManager):
                         # Early exit if the request has failed
                         with self.session_lock:
                             if req.mooncake_session_id in self.failed_sessions:
+                                num_failures = self.session_failures.get(
+                                    req.mooncake_session_id, 0
+                                )
+                                logger.error(
+                                    "Skipping transfer to failed session %s "
+                                    "(num_failures=%d, room=%s, "
+                                    "endpoint=%s:%s)",
+                                    req.mooncake_session_id,
+                                    num_failures,
+                                    kv_chunk.room,
+                                    maybe_wrap_ipv6_address(req.endpoint),
+                                    req.dst_port,
+                                )
                                 self.record_failure(
                                     kv_chunk.room,
-                                    f"Decode instance could be dead, remote mooncake session {req.mooncake_session_id} is not alive",
+                                    f"Decode instance could be dead, remote mooncake session "
+                                    f"{req.mooncake_session_id} is not alive "
+                                    f"(num_failures={num_failures})",
                                 )
                                 self.update_status(kv_chunk.room, KVPoll.Failed)
                                 self.sync_status_to_decode_endpoint(
@@ -963,7 +978,7 @@ class MooncakeKVManager(CommonKVManager):
                                 if self.session_failures[req.mooncake_session_id] >= 1:
                                     self.failed_sessions.add(req.mooncake_session_id)
                                     logger.error(
-                                        "Session %s failed (ret=%d): "
+                                        "Marking session %s as failed (ret=%d): "
                                         "local_session=%s, "
                                         "dst=%s:%s, "
                                         "room=%s, "
@@ -1069,10 +1084,15 @@ class MooncakeKVManager(CommonKVManager):
                     with self.session_lock:
                         if mooncake_session_id in self.failed_sessions:
                             self.failed_sessions.remove(mooncake_session_id)
+                            logger.warning(
+                                "Cleared failed session state for %s",
+                                mooncake_session_id,
+                            )
                         if mooncake_session_id in self.session_failures:
                             del self.session_failures[mooncake_session_id]
-                    logger.debug(
-                        f"Register KVArgs from {mooncake_session_id} successfully"
+                    logger.warning(
+                        "Register KVArgs from %s successfully",
+                        mooncake_session_id,
                     )
                     continue
                 else:
