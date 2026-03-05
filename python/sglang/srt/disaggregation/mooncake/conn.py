@@ -916,17 +916,27 @@ class MooncakeKVManager(CommonKVManager):
                                 if self.session_failures[req.mooncake_session_id] >= 1:
                                     self.failed_sessions.add(req.mooncake_session_id)
                                     logger.error(
-                                        "Session %s failed: ret=%d, "
-                                        "endpoint=%s, dst_port=%s, "
-                                        "room=%s, index_slice=%s, "
-                                        "is_last=%s, num_failures=%d",
+                                        "Session %s failed (ret=%d): "
+                                        "local_session=%s, "
+                                        "dst=%s:%s, "
+                                        "room=%s, "
+                                        "prefill_indices=%d, dst_indices=%d, "
+                                        "index_slice=%s, is_last=%s, "
+                                        "backend=%s, "
+                                        "num_failures=%d",
                                         req.mooncake_session_id,
                                         ret,
+                                        self.engine.get_session_id(),
                                         maybe_wrap_ipv6_address(req.endpoint),
                                         req.dst_port,
                                         kv_chunk.room,
+                                        len(kv_chunk.prefill_kv_indices),
+                                        len(chunked_dst_kv_indice),
                                         kv_chunk.index_slice,
                                         kv_chunk.is_last_chunk,
+                                        "mla"
+                                        if self.is_mla_backend
+                                        else "mha",
                                         self.session_failures[
                                             req.mooncake_session_id
                                         ],
@@ -934,7 +944,10 @@ class MooncakeKVManager(CommonKVManager):
                             self.record_failure(
                                 kv_chunk.room,
                                 f"Failed to send kv chunk of {kv_chunk.room} to "
-                                f"{maybe_wrap_ipv6_address(req.endpoint)}:{req.dst_port}",
+                                f"{maybe_wrap_ipv6_address(req.endpoint)}:{req.dst_port} "
+                                f"(ret={ret}, session={req.mooncake_session_id}, "
+                                f"prefill_indices={len(kv_chunk.prefill_kv_indices)}, "
+                                f"dst_indices={len(chunked_dst_kv_indice)})",
                             )
                             self.update_status(kv_chunk.room, KVPoll.Failed)
                             self.sync_status_to_decode_endpoint(
