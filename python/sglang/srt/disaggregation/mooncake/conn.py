@@ -35,7 +35,11 @@ from sglang.srt.disaggregation.utils import (
 from sglang.srt.distributed.parallel_state import get_mooncake_transfer_engine
 from sglang.srt.environ import envs
 from sglang.srt.server_args import ServerArgs
-from sglang.srt.utils import format_tcp_address, is_valid_ipv6_address
+from sglang.srt.utils import (
+    format_tcp_address,
+    is_valid_ipv6_address,
+    maybe_wrap_ipv6_address,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -220,18 +224,36 @@ class MooncakeKVManager(CommonKVManager):
     def register_buffer_to_engine(self):
         # Batch register KV data buffers
         if self.kv_args.kv_data_ptrs and self.kv_args.kv_data_lens:
+            logger.warning(
+                "Registering KV data buffers: num=%d, ptrs=[%s], lens=[%s]",
+                len(self.kv_args.kv_data_ptrs),
+                ", ".join(f"0x{p:x}" for p in self.kv_args.kv_data_ptrs[:4]),
+                ", ".join(str(l) for l in self.kv_args.kv_data_lens[:4]),
+            )
             self.engine.batch_register(
                 self.kv_args.kv_data_ptrs, self.kv_args.kv_data_lens
             )
 
         # Batch register auxiliary data buffers
         if self.kv_args.aux_data_ptrs and self.kv_args.aux_data_lens:
+            logger.warning(
+                "Registering aux data buffers: num=%d, ptrs=[%s], lens=[%s]",
+                len(self.kv_args.aux_data_ptrs),
+                ", ".join(f"0x{p:x}" for p in self.kv_args.aux_data_ptrs[:4]),
+                ", ".join(str(l) for l in self.kv_args.aux_data_lens[:4]),
+            )
             self.engine.batch_register(
                 self.kv_args.aux_data_ptrs, self.kv_args.aux_data_lens
             )
 
         # Batch register state/extra pool data buffers
         if self.kv_args.state_data_ptrs and self.kv_args.state_data_lens:
+            logger.warning(
+                "Registering state data buffers: num=%d, ptrs=[%s], lens=[%s]",
+                len(self.kv_args.state_data_ptrs),
+                ", ".join(f"0x{p:x}" for p in self.kv_args.state_data_ptrs[:4]),
+                ", ".join(str(l) for l in self.kv_args.state_data_lens[:4]),
+            )
             self.engine.batch_register(
                 self.kv_args.state_data_ptrs, self.kv_args.state_data_lens
             )
@@ -241,9 +263,28 @@ class MooncakeKVManager(CommonKVManager):
             return 0
 
         src_addrs, dst_addrs, lengths = zip(*transfer_blocks)
-        return self.engine.batch_transfer_sync(
+        ret = self.engine.batch_transfer_sync(
             mooncake_session_id, list(src_addrs), list(dst_addrs), list(lengths)
         )
+        if ret != 0:
+            # Log address ranges to help debug "address not found" errors
+            for i, (src, dst, length) in enumerate(transfer_blocks[:5]):
+                logger.error(
+                    "  transfer_block[%d]: src=0x%x..0x%x, dst=0x%x..0x%x, "
+                    "length=%d",
+                    i,
+                    src,
+                    src + length,
+                    dst,
+                    dst + length,
+                    length,
+                )
+            if len(transfer_blocks) > 5:
+                logger.error(
+                    "  ... and %d more transfer blocks",
+                    len(transfer_blocks) - 5,
+                )
+        return ret
 
     def _send_kvcache_generic(
         self,
@@ -307,6 +348,19 @@ class MooncakeKVManager(CommonKVManager):
                 for layer_id in range(layers_current_pp_stage)
             ]
         assert layers_params is not None
+        logger.warning(
+            "send_kvcache: session=%s, num_layers=%d, "
+            "num_prefill_blocks=%d, num_dst_blocks=%d, "
+            "base_ptrs=[%s]",
+            mooncake_session_id,
+            len(layers_params),
+            len(prefill_kv_blocks),
+            len(dst_kv_blocks),
+            ", ".join(
+                f"(src=0x{s:x}, dst=0x{d:x}, item_len={l})"
+                for s, d, l in layers_params[:3]
+            ),
+        )
 
         def set_transfer_blocks(
             src_ptr: int, dst_ptr: int, item_len: int
@@ -552,20 +606,43 @@ class MooncakeKVManager(CommonKVManager):
         aux_index: int,
         data: bytes,
     ):
+        endpoint = format_tcp_address(remote, dst_port)
+        logger.warning(
+            "Sending aux data: endpoint=%s, room=%s, "
+            "buffer_index=%d, aux_index=%d, data_len=%d",
+            endpoint,
+            room,
+            buffer_index,
+            aux_index,
+            len(data),
+        )
         socket = self._connect(
-            format_tcp_address(remote, dst_port), is_ipv6=is_valid_ipv6_address(remote)
+            endpoint, is_ipv6=is_valid_ipv6_address(remote)
         )
 
-        socket.send_multipart(
-            [
-                MooncakeKVManager.AUX_DATA_HEADER,
-                str(room).encode("ascii"),
-                str(buffer_index).encode("ascii"),
-                str(aux_index).encode("ascii"),
-                struct.pack(">I", len(data)),
-                data,
-            ]
-        )
+        try:
+            socket.send_multipart(
+                [
+                    MooncakeKVManager.AUX_DATA_HEADER,
+                    str(room).encode("ascii"),
+                    str(buffer_index).encode("ascii"),
+                    str(aux_index).encode("ascii"),
+                    struct.pack(">I", len(data)),
+                    data,
+                ]
+            )
+            logger.warning("Sent aux data: endpoint=%s, room=%s", endpoint, room)
+        except Exception as e:
+            logger.error(
+                "Failed to send aux data: endpoint=%s, room=%s, "
+                "buffer_index=%d, aux_index=%d, error=%s",
+                endpoint,
+                room,
+                buffer_index,
+                aux_index,
+                e,
+            )
+            raise
 
     def _handle_aux_data(self, msg: List[bytes]):
         """Handle AUX_DATA messages received by the decode thread."""
@@ -759,15 +836,39 @@ class MooncakeKVManager(CommonKVManager):
     def sync_status_to_decode_endpoint(
         self, remote: str, dst_port: int, room: int, status: int, prefill_rank: int
     ):
-        self._connect(
-            format_tcp_address(remote, dst_port), is_ipv6=is_valid_ipv6_address(remote)
-        ).send_multipart(
-            [
-                str(room).encode("ascii"),
-                str(status).encode("ascii"),
-                str(prefill_rank).encode("ascii"),
-            ]
+        endpoint = format_tcp_address(remote, dst_port)
+        logger.warning(
+            "Syncing status to decode: endpoint=%s, room=%s, "
+            "status=%d, prefill_rank=%d",
+            endpoint,
+            room,
+            status,
+            prefill_rank,
         )
+        try:
+            self._connect(
+                endpoint, is_ipv6=is_valid_ipv6_address(remote)
+            ).send_multipart(
+                [
+                    str(room).encode("ascii"),
+                    str(status).encode("ascii"),
+                    str(prefill_rank).encode("ascii"),
+                ]
+            )
+            logger.warning(
+                "Synced status to decode: endpoint=%s, room=%s", endpoint, room
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to sync status to decode: endpoint=%s, room=%s, "
+                "status=%d, prefill_rank=%d, error=%s",
+                endpoint,
+                room,
+                status,
+                prefill_rank,
+                e,
+            )
+            raise
 
     def transfer_worker(
         self, queue: FastQueue, executor: concurrent.futures.ThreadPoolExecutor
@@ -793,9 +894,24 @@ class MooncakeKVManager(CommonKVManager):
                         # Early exit if the request has failed
                         with self.session_lock:
                             if req.mooncake_session_id in self.failed_sessions:
+                                num_failures = self.session_failures.get(
+                                    req.mooncake_session_id, 0
+                                )
+                                logger.error(
+                                    "Skipping transfer to failed session %s "
+                                    "(num_failures=%d, room=%s, "
+                                    "endpoint=%s:%s)",
+                                    req.mooncake_session_id,
+                                    num_failures,
+                                    kv_chunk.room,
+                                    maybe_wrap_ipv6_address(req.endpoint),
+                                    req.dst_port,
+                                )
                                 self.record_failure(
                                     kv_chunk.room,
-                                    f"Decode instance could be dead, remote mooncake session {req.mooncake_session_id} is not alive",
+                                    f"Decode instance could be dead, remote mooncake session "
+                                    f"{req.mooncake_session_id} is not alive "
+                                    f"(num_failures={num_failures})",
                                 )
                                 self.update_status(kv_chunk.room, KVPoll.Failed)
                                 self.sync_status_to_decode_endpoint(
@@ -853,11 +969,38 @@ class MooncakeKVManager(CommonKVManager):
                                 if self.session_failures[req.mooncake_session_id] >= 1:
                                     self.failed_sessions.add(req.mooncake_session_id)
                                     logger.error(
-                                        f"Session {req.mooncake_session_id} failed."
+                                        "Marking session %s as failed (ret=%d): "
+                                        "local_session=%s, "
+                                        "dst=%s:%s, "
+                                        "room=%s, "
+                                        "prefill_indices=%d, dst_indices=%d, "
+                                        "index_slice=%s, is_last=%s, "
+                                        "backend=%s, "
+                                        "num_failures=%d",
+                                        req.mooncake_session_id,
+                                        ret,
+                                        self.engine.get_session_id(),
+                                        maybe_wrap_ipv6_address(req.endpoint),
+                                        req.dst_port,
+                                        kv_chunk.room,
+                                        len(kv_chunk.prefill_kv_indices),
+                                        len(chunked_dst_kv_indice),
+                                        kv_chunk.index_slice,
+                                        kv_chunk.is_last_chunk,
+                                        "mla"
+                                        if self.is_mla_backend
+                                        else "mha",
+                                        self.session_failures[
+                                            req.mooncake_session_id
+                                        ],
                                     )
                             self.record_failure(
                                 kv_chunk.room,
-                                f"Failed to send kv chunk of {kv_chunk.room} to {req.endpoint}:{req.dst_port}",
+                                f"Failed to send kv chunk of {kv_chunk.room} to "
+                                f"{maybe_wrap_ipv6_address(req.endpoint)}:{req.dst_port} "
+                                f"(ret={ret}, session={req.mooncake_session_id}, "
+                                f"prefill_indices={len(kv_chunk.prefill_kv_indices)}, "
+                                f"dst_indices={len(chunked_dst_kv_indice)})",
                             )
                             self.update_status(kv_chunk.room, KVPoll.Failed)
                             self.sync_status_to_decode_endpoint(
@@ -936,10 +1079,15 @@ class MooncakeKVManager(CommonKVManager):
                     with self.session_lock:
                         if mooncake_session_id in self.failed_sessions:
                             self.failed_sessions.remove(mooncake_session_id)
+                            logger.warning(
+                                "Cleared failed session state for %s",
+                                mooncake_session_id,
+                            )
                         if mooncake_session_id in self.session_failures:
                             del self.session_failures[mooncake_session_id]
-                    logger.debug(
-                        f"Register KVArgs from {mooncake_session_id} successfully"
+                    logger.warning(
+                        "Register KVArgs from %s successfully",
+                        mooncake_session_id,
                     )
                     continue
                 else:
@@ -982,9 +1130,18 @@ class MooncakeKVManager(CommonKVManager):
                         if arrived_response_num == expected_response_num:
                             self.update_status(bootstrap_room, KVPoll.Success)
                 elif status == KVPoll.Failed:
+                    prefill_addr = next(
+                        (
+                            addr
+                            for addr, rooms in self.addr_to_rooms_tracker.items()
+                            if bootstrap_room in rooms
+                        ),
+                        "unknown",
+                    )
                     self.record_failure(
                         bootstrap_room,
-                        "Failed to get kvcache from prefill instance, it might be dead",
+                        f"Failed to get kvcache from prefill instance at {prefill_addr} "
+                        f"(room={bootstrap_room}), it might be dead",
                     )
                     self.update_status(bootstrap_room, status)
 
@@ -1277,23 +1434,52 @@ class MooncakeKVReceiver(CommonKVReceiver):
             dst_kv_item_len = str(kv_item_len).encode("ascii")
 
             sock, lock = self._connect_to_bootstrap_server(bootstrap_info)
+            bootstrap_addr = bootstrap_info.get("bootstrap_addr", "unknown")
             with lock:
-                sock.send_multipart(
-                    [
-                        "None".encode("ascii"),
-                        self.kv_mgr.local_ip.encode("ascii"),
-                        str(self.kv_mgr.rank_port).encode("ascii"),
-                        self.session_id.encode("ascii"),
-                        packed_kv_data_ptrs,
-                        packed_aux_data_ptrs,
-                        packed_state_data_ptrs,
-                        dst_tp_rank,
-                        dst_attn_tp_size,
-                        dst_kv_item_len,
-                        packed_state_item_lens,
-                        packed_state_dim_per_tensor,
-                    ]
+                logger.warning(
+                    "Sending decode registration: bootstrap=%s, "
+                    "local_ip=%s, rank_port=%d, session_id=%s, "
+                    "tp_rank=%d, attn_tp_size=%d, kv_item_len=%d",
+                    bootstrap_addr,
+                    self.kv_mgr.local_ip,
+                    self.kv_mgr.rank_port,
+                    self.session_id,
+                    tp_rank,
+                    self.kv_mgr.attn_tp_size,
+                    kv_item_len,
                 )
+                try:
+                    sock.send_multipart(
+                        [
+                            "None".encode("ascii"),
+                            self.kv_mgr.local_ip.encode("ascii"),
+                            str(self.kv_mgr.rank_port).encode("ascii"),
+                            self.session_id.encode("ascii"),
+                            packed_kv_data_ptrs,
+                            packed_aux_data_ptrs,
+                            packed_state_data_ptrs,
+                            dst_tp_rank,
+                            dst_attn_tp_size,
+                            dst_kv_item_len,
+                            packed_state_item_lens,
+                            packed_state_dim_per_tensor,
+                        ]
+                    )
+                    logger.warning(
+                        "Sent decode registration: bootstrap=%s, "
+                        "session_id=%s",
+                        bootstrap_addr,
+                        self.session_id,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to send decode registration: bootstrap=%s, "
+                        "session_id=%s, error=%s",
+                        bootstrap_addr,
+                        self.session_id,
+                        e,
+                    )
+                    raise
 
     def init(
         self,
@@ -1312,27 +1498,54 @@ class MooncakeKVReceiver(CommonKVReceiver):
         for bootstrap_info in self.bootstrap_infos:
             sock, lock = self._connect_to_bootstrap_server(bootstrap_info)
             is_dummy = bootstrap_info["is_dummy"]
+            bootstrap_addr = bootstrap_info.get("bootstrap_addr", "unknown")
 
             with lock:
-                sock.send_multipart(
-                    [
-                        str(self.bootstrap_room).encode("ascii"),
-                        self.kv_mgr.local_ip.encode("ascii"),
-                        str(self.kv_mgr.rank_port).encode("ascii"),
-                        self.session_id.encode("ascii"),
-                        kv_indices.tobytes() if not is_dummy else b"",
-                        str(aux_index).encode("ascii") if not is_dummy else b"",
-                        (
-                            np.array(
-                                state_indices,
-                                dtype=np.int32,
-                            ).tobytes()
-                            if not is_dummy and state_indices is not None
-                            else b""
-                        ),
-                        str(self.required_dst_info_num).encode("ascii"),
-                    ]
+                logger.warning(
+                    "Sending decode init: bootstrap=%s, "
+                    "room=%s, session_id=%s, "
+                    "is_dummy=%s, num_kv_indices=%d",
+                    bootstrap_addr,
+                    self.bootstrap_room,
+                    self.session_id,
+                    is_dummy,
+                    len(kv_indices),
                 )
+                try:
+                    sock.send_multipart(
+                        [
+                            str(self.bootstrap_room).encode("ascii"),
+                            self.kv_mgr.local_ip.encode("ascii"),
+                            str(self.kv_mgr.rank_port).encode("ascii"),
+                            self.session_id.encode("ascii"),
+                            kv_indices.tobytes() if not is_dummy else b"",
+                            str(aux_index).encode("ascii") if not is_dummy else b"",
+                            (
+                                np.array(
+                                    state_indices,
+                                    dtype=np.int32,
+                                ).tobytes()
+                                if not is_dummy and state_indices is not None
+                                else b""
+                            ),
+                            str(self.required_dst_info_num).encode("ascii"),
+                        ]
+                    )
+                    logger.warning(
+                        "Sent decode init: bootstrap=%s, room=%s",
+                        bootstrap_addr,
+                        self.bootstrap_room,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to send decode init: bootstrap=%s, "
+                        "room=%s, session_id=%s, error=%s",
+                        bootstrap_addr,
+                        self.bootstrap_room,
+                        self.session_id,
+                        e,
+                    )
+                    raise
         self.init_time = time.time()
 
     def poll(self) -> KVPoll:
