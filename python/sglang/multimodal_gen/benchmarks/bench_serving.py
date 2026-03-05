@@ -635,7 +635,8 @@ async def benchmark(args):
 
     # Construct base_url if not provided
     if args.base_url is None:
-        args.base_url = f"http://{args.host}:{args.port}"
+        _host = f"[{args.host}]" if ":" in args.host else args.host
+        args.base_url = f"http://{_host}:{args.port}"
 
     # Wait for service
     wait_for_service(args.base_url)

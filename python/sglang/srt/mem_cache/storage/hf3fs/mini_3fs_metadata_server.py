@@ -304,7 +304,8 @@ class Hf3fsMetadataServer:
 
         import uvicorn
 
-        logging.info(f"Starting metadata server on http://{host}:{port}")
+        wrapped_host = f"[{host}]" if ":" in str(host) else host
+        logging.info(f"Starting metadata server on http://{wrapped_host}:{port}")
         if self.state.persistence_path:
             logging.info(
                 f"Persistence is ENABLED. Saving to '{self.state.persistence_path}' every {self.state.save_interval} seconds."

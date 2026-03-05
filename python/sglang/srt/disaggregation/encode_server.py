@@ -390,7 +390,7 @@ class MMEncoder:
         endpoint = (
             f"tcp://{url}"
             if url is not None
-            else f"tcp://{prefill_host}:{embedding_port}"
+            else format_tcp_address(prefill_host, embedding_port)
         )
         logger.info(f"{endpoint = }")
 

@@ -727,7 +727,10 @@ def _create_zmq_rpc_broadcast(
     rank = _get_rank()
     world_size = dist.get_world_size() if dist.is_initialized() else 1
     port = base_port + rank
-    local_addr = f"tcp://{_get_local_ip_by_remote()}:{port}"
+    local_ip = _get_local_ip_by_remote()
+    if local_ip and ":" in local_ip:
+        local_ip = f"[{local_ip}]"
+    local_addr = f"tcp://{local_ip}:{port}"
 
     ctx = zmq.Context()
     sock = ctx.socket(zmq.REP)

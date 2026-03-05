@@ -110,6 +110,7 @@ from sglang.srt.utils import (
     get_device_capability,
     is_npu,
     is_pin_memory_available,
+    maybe_wrap_ipv6_address,
     rank0_log,
     resolve_hostname,
     set_weight_attrs,
@@ -2106,7 +2107,7 @@ class RemoteInstanceModelLoader(BaseModelLoader):
             load_config.remote_instance_weight_loader_backend
             == RemoteInstanceWeightLoaderBackend.NCCL
         ):
-            model_weights = f"instance://{load_config.remote_instance_weight_loader_seed_instance_ip}:{load_config.remote_instance_weight_loader_send_weights_group_ports[load_config.tp_rank]}"
+            model_weights = f"instance://{maybe_wrap_ipv6_address(load_config.remote_instance_weight_loader_seed_instance_ip)}:{load_config.remote_instance_weight_loader_send_weights_group_ports[load_config.tp_rank]}"
             with create_remote_connector(model_weights, device_config.device) as client:
                 connector_type = get_connector_type(client)
                 if connector_type == ConnectorType.INSTANCE:
@@ -2142,7 +2143,7 @@ class RemoteInstanceModelLoader(BaseModelLoader):
             success = self.load_model_from_remote_instance_by_transfer_engine(
                 model,
                 load_config.remote_instance_weight_loader_transfer_engine,
-                f"http://{load_config.remote_instance_weight_loader_seed_instance_ip}:{load_config.remote_instance_weight_loader_seed_instance_service_port}",
+                f"http://{maybe_wrap_ipv6_address(load_config.remote_instance_weight_loader_seed_instance_ip)}:{load_config.remote_instance_weight_loader_seed_instance_service_port}",
                 load_config.tp_rank,
             )
             if not success:
