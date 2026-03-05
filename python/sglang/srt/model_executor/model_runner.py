@@ -170,6 +170,7 @@ from sglang.srt.utils import (
     require_gathered_buffer,
     require_mlp_tp_gather,
     reserve_rope_cache_for_long_sequences,
+    resolve_hostname,
     set_cuda_arch,
     slow_rank_detector,
 )
@@ -956,7 +957,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             == RemoteInstanceWeightLoaderBackend.NCCL
         ):
             if self.tp_rank == 0:
-                instance_ip = socket.gethostbyname(socket.gethostname())
+                instance_ip = resolve_hostname(socket.gethostname())
                 t = threading.Thread(
                     target=trigger_init_weights_send_group_for_remote_instance_request,
                     args=(
