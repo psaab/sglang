@@ -48,7 +48,9 @@ class AscendTransferEngine(MooncakeTransferEngine):
         else:
             logger.error(f"Unsupported DisaggregationMode: {disaggregation_mode}")
             raise ValueError(f"Unsupported DisaggregationMode: {disaggregation_mode}")
-        self.session_id = f"{maybe_wrap_ipv6_address(self.hostname)}:{self.engine.get_rpc_port()}"
+        self.session_id = (
+            f"{maybe_wrap_ipv6_address(self.hostname)}:{self.engine.get_rpc_port()}"
+        )
         self.initialize()
 
     def initialize(self) -> None:

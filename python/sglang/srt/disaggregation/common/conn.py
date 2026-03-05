@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-import socket
 import threading
 import time
 from collections import defaultdict

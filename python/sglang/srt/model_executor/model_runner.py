@@ -673,9 +673,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         self.remote_instance_transfer_engine.initialize(
             local_ip, "P2PHANDSHAKE", "rdma", envs.MOONCAKE_DEVICE.get()
         )
-        self.remote_instance_transfer_engine_session_id = (
-            f"{maybe_wrap_ipv6_address(local_ip)}:{self.remote_instance_transfer_engine.get_rpc_port()}"
-        )
+        self.remote_instance_transfer_engine_session_id = f"{maybe_wrap_ipv6_address(local_ip)}:{self.remote_instance_transfer_engine.get_rpc_port()}"
 
     def model_specific_adjustment(self):
         server_args = self.server_args
@@ -1239,9 +1237,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             )
             dist.barrier(group=self._weights_send_group[group_name])
             success = True
-            message = (
-                f"Succeeded to init group through {maybe_wrap_ipv6_address(master_address)}:{group_port} group."
-            )
+            message = f"Succeeded to init group through {maybe_wrap_ipv6_address(master_address)}:{group_port} group."
         except Exception as e:
             message = f"Failed to init group: {e}."
             logger.error(message)
