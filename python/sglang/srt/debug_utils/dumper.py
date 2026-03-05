@@ -728,13 +728,15 @@ def _create_zmq_rpc_broadcast(
     world_size = dist.get_world_size() if dist.is_initialized() else 1
     port = base_port + rank
     local_ip = _get_local_ip_by_remote()
-    if local_ip and ":" in local_ip:
-        local_ip = f"[{local_ip}]"
-    local_addr = f"tcp://{local_ip}:{port}"
+    _is_ipv6 = local_ip and ":" in local_ip
 
     ctx = zmq.Context()
     sock = ctx.socket(zmq.REP)
+    if _is_ipv6:
+        sock.setsockopt(zmq.IPV6, 1)
+        local_ip = f"[{local_ip}]"
     sock.bind(f"tcp://*:{port}")
+    local_addr = f"tcp://{local_ip}:{port}"
 
     def serve_loop():
         while True:
@@ -766,6 +768,8 @@ def _create_zmq_rpc_broadcast(
         handles = []
         for i, addr in enumerate(all_addresses):
             req_socket = ctx.socket(zmq.REQ)
+            if "[" in addr:
+                req_socket.setsockopt(zmq.IPV6, 1)
             req_socket.connect(addr)
             handles.append(_ZmqRpcHandle(req_socket, debug_name=f"rank-{i}"))
         return _ZmqRpcBroadcast(handles)
