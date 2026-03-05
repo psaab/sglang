@@ -366,7 +366,11 @@ class MooncakeStore(HiCacheStorage, MooncakeBaseStore):
                         f"Reuse initialized mooncake transfer engine: {self._shared_mooncake_transfer_engine}"
                     )
                 else:
-                    client_hostname = self.config.local_hostname
+                    from sglang.srt.utils.common import maybe_wrap_ipv6_address
+
+                    client_hostname = maybe_wrap_ipv6_address(
+                        self.config.local_hostname
+                    )
                     transfer_engine = None
 
                 ret_code = self.store.setup(

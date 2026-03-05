@@ -2750,14 +2750,14 @@ def launch_dummy_health_check_server(host, port, enable_metrics):
             logger.error(f"Dummy health check server failed to start: {e}")
             raise
         finally:
-            logger.info(f"Dummy health check server stopped at {host}:{port}")
+            logger.info(f"Dummy health check server stopped at {maybe_wrap_ipv6_address(host)}:{port}")
 
     thread = threading.Thread(
         target=run_server, daemon=True, name="health-check-server"
     )
     thread.start()
     logger.info(
-        f"Dummy health check server started in background thread at {host}:{port}"
+        f"Dummy health check server started in background thread at {maybe_wrap_ipv6_address(host)}:{port}"
     )
 
 

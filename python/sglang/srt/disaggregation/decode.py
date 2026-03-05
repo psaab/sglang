@@ -65,6 +65,7 @@ from sglang.srt.observability.req_time_stats import (
     set_schedule_time_batch,
     set_time_batch,
 )
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 from sglang.srt.utils.torch_memory_saver_adapter import TorchMemorySaverAdapter
 
 logger = logging.getLogger(__name__)
@@ -365,7 +366,7 @@ class DecodePreallocQueue:
         if _is_fake_transfer(req, self.scheduler.server_args):
             return 0
 
-        bootstrap_addr = f"{req.bootstrap_host}:{req.bootstrap_port}"
+        bootstrap_addr = f"{maybe_wrap_ipv6_address(req.bootstrap_host)}:{req.bootstrap_port}"
 
         prefill_info = self.kv_manager.prefill_info_table.get(bootstrap_addr)
         if prefill_info is None:
@@ -389,7 +390,7 @@ class DecodePreallocQueue:
 
         kv_receiver = kv_receiver_class(
             mgr=self.kv_manager,
-            bootstrap_addr=f"{req.bootstrap_host}:{req.bootstrap_port}",
+            bootstrap_addr=f"{maybe_wrap_ipv6_address(req.bootstrap_host)}:{req.bootstrap_port}",
             bootstrap_room=req.bootstrap_room,
             prefill_dp_rank=prefill_dp_rank,
         )
@@ -498,7 +499,7 @@ class DecodePreallocQueue:
         if not self.pending_reqs:
             return
 
-        bootstrap_addr = f"{self.pending_reqs[0].bootstrap_host}:{self.pending_reqs[0].bootstrap_port}"
+        bootstrap_addr = f"{maybe_wrap_ipv6_address(self.pending_reqs[0].bootstrap_host)}:{self.pending_reqs[0].bootstrap_port}"
 
         # If a request is following the bootstrap room,
         # we need get the prefill info before resolving the prefill_dp_ranks

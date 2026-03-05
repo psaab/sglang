@@ -41,6 +41,7 @@ from sglang.srt.managers.schedule_batch import Modality, MultimodalDataItem
 from sglang.srt.sampling.sampling_params import SamplingParams as SGLSamplingParams
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils import kill_process_tree
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 from sglang.utils import get_exception_traceback
 
 logger = logging.getLogger(__name__)
@@ -958,7 +959,7 @@ async def serve_grpc(
         bootstrap_server = start_disagg_service(server_args)
         if bootstrap_server:
             logger.info(
-                f"Bootstrap server started for disaggregation mode on {server_args.host}:{server_args.disaggregation_bootstrap_port}"
+                f"Bootstrap server started for disaggregation mode on {maybe_wrap_ipv6_address(server_args.host)}:{server_args.disaggregation_bootstrap_port}"
             )
 
     # Launch only the scheduler process(es) (no tokenizer/detokenizer needed for gRPC)
@@ -1049,7 +1050,7 @@ async def serve_grpc(
     reflection.enable_server_reflection(SERVICE_NAMES, server)
 
     # Start server
-    listen_addr = f"{server_args.host}:{server_args.port}"
+    listen_addr = f"{maybe_wrap_ipv6_address(server_args.host)}:{server_args.port}"
     server.add_insecure_port(listen_addr)
 
     await server.start()
@@ -1110,7 +1111,7 @@ def _execute_grpc_server_warmup(server_args: ServerArgs):
     """Execute warmup for gRPC server by checking health and sending test request."""
     try:
         # Connect to the gRPC server
-        grpc_url = f"{server_args.host}:{server_args.port}"
+        grpc_url = f"{maybe_wrap_ipv6_address(server_args.host)}:{server_args.port}"
         channel = grpc.insecure_channel(
             grpc_url,
             options=[
