@@ -167,8 +167,14 @@ from sglang.srt.utils import (
     require_gathered_buffer,
     require_mlp_tp_gather,
     reserve_rope_cache_for_long_sequences,
+    resolve_hostname,
     set_cuda_arch,
     slow_rank_detector,
+)
+from sglang.srt.utils.common import (
+    format_tcp_address,
+    maybe_wrap_ipv6_address,
+    parse_host_port,
 )
 from sglang.srt.utils.nvtx_pytorch_hooks import PytHooks
 from sglang.srt.utils.offloader import (
@@ -774,9 +780,12 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         if dist_init_method_override:
             dist_init_method = dist_init_method_override
         elif self.server_args.dist_init_addr:
-            dist_init_method = f"tcp://{self.server_args.dist_init_addr}"
+            host, port = parse_host_port(self.server_args.dist_init_addr)
+            dist_init_method = format_tcp_address(host, port)
         else:
-            dist_init_method = f"tcp://127.0.0.1:{self.dist_port}"
+            dist_init_method = format_tcp_address(
+                self.server_args.host or "::1", self.dist_port
+            )
         set_custom_all_reduce(not self.server_args.disable_custom_all_reduce)
         set_mscclpp_all_reduce(self.server_args.enable_mscclpp)
         set_torch_symm_mem_all_reduce(self.server_args.enable_torch_symm_mem)
@@ -950,7 +959,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             == RemoteInstanceWeightLoaderBackend.NCCL
         ):
             if self.tp_rank == 0:
-                instance_ip = socket.gethostbyname(socket.gethostname())
+                instance_ip = resolve_hostname(socket.gethostname())
                 t = threading.Thread(
                     target=trigger_init_weights_send_group_for_remote_instance_request,
                     args=(

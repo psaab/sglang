@@ -192,7 +192,7 @@ class MessageQueue:
 
         if connect_ip is None:
             connect_ip = (
-                get_local_ip_auto("0.0.0.0") if n_remote_reader > 0 else "127.0.0.1"
+                get_local_ip_auto("::") if n_remote_reader > 0 else "::1"
             )
 
         context = Context()
@@ -212,7 +212,7 @@ class MessageQueue:
             # see http://api.zeromq.org/3-3:zmq-setsockopt for more details
             self.local_socket.setsockopt(XPUB_VERBOSE, True)
             local_subscribe_port = get_open_port()
-            socket_addr = f"tcp://127.0.0.1:{local_subscribe_port}"
+            socket_addr = format_tcp_address("::1", local_subscribe_port)
             logger.debug("Binding to %s", socket_addr)
             self.local_socket.bind(socket_addr)
             self.current_idx = 0
@@ -276,7 +276,7 @@ class MessageQueue:
 
             self.local_socket = context.socket(SUB)
             self.local_socket.setsockopt_string(SUBSCRIBE, "")
-            socket_addr = f"tcp://127.0.0.1:{handle.local_subscribe_port}"
+            socket_addr = format_tcp_address("::1", handle.local_subscribe_port)
             logger.debug("Connecting to %s", socket_addr)
             self.local_socket.connect(socket_addr)
 
