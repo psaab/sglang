@@ -71,6 +71,8 @@ class SchedulerClient:
         self.scheduler_socket.setsockopt(zmq.RCVTIMEO, 6000000)
 
         scheduler_endpoint = self.server_args.scheduler_endpoint
+        if "[" in scheduler_endpoint:
+            self.scheduler_socket.setsockopt(zmq.IPV6, 1)
         self.scheduler_socket.connect(scheduler_endpoint)
         logger.debug(
             f"SchedulerClient connected to backend scheduler at {scheduler_endpoint}"
@@ -99,6 +101,8 @@ class SchedulerClient:
         ping_socket.setsockopt(zmq.RCVTIMEO, 2000)  # 2-second timeout for pings
 
         endpoint = self.server_args.scheduler_endpoint
+        if "[" in endpoint:
+            ping_socket.setsockopt(zmq.IPV6, 1)
 
         try:
             ping_socket.connect(endpoint)
@@ -158,6 +162,8 @@ class AsyncSchedulerClient:
         socket.setsockopt(zmq.RCVTIMEO, 6000000)
 
         endpoint = self.server_args.scheduler_endpoint
+        if "[" in endpoint:
+            socket.setsockopt(zmq.IPV6, 1)
         socket.connect(endpoint)
 
         try:
@@ -183,6 +189,8 @@ class AsyncSchedulerClient:
         ping_socket.setsockopt(zmq.RCVTIMEO, 2000)
 
         endpoint = self.server_args.scheduler_endpoint
+        if "[" in endpoint:
+            ping_socket.setsockopt(zmq.IPV6, 1)
 
         try:
             ping_socket.connect(endpoint)

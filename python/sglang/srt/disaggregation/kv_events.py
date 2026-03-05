@@ -254,11 +254,13 @@ class ZmqEventPublisher(EventPublisher):
         if self._pub is None:
             self._pub = self._ctx.socket(zmq.PUB)
             self._pub.set_hwm(self._hwm)
+            if "[" in self._endpoint:
+                self._pub.setsockopt(zmq.IPV6, 1)
             # Heuristic: bind if wildcard / * present, else connect.
             # bind stable, connect volatile convention
             if (
                 "*" in self._endpoint
-                or "::" in self._endpoint
+                or self._endpoint.startswith("tcp://[::]:") or self._endpoint == "tcp://[::]"
                 or self._endpoint.startswith("ipc://")
                 or self._endpoint.startswith("inproc://")
             ):
@@ -275,6 +277,8 @@ class ZmqEventPublisher(EventPublisher):
         # 3) works in our non‑blocking poll loop alongside PUB
         if self._replay_endpoint is not None:
             self._replay = self._ctx.socket(zmq.ROUTER)
+            if "[" in self._replay_endpoint:
+                self._replay.setsockopt(zmq.IPV6, 1)
             logger.debug(
                 f"ZmqEventPublisher socket replay_endpoint bind to {self._replay_endpoint}"
             )
