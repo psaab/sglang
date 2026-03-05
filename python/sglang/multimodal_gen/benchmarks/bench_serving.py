@@ -33,6 +33,7 @@ from sglang.multimodal_gen.runtime.utils.logging_utils import (
     configure_logger,
     init_logger,
 )
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 
 logger = init_logger(__name__)
 
@@ -635,7 +636,8 @@ async def benchmark(args):
 
     # Construct base_url if not provided
     if args.base_url is None:
-        args.base_url = f"http://{args.host}:{args.port}"
+        _host = maybe_wrap_ipv6_address(args.host)
+        args.base_url = f"http://{_host}:{args.port}"
 
     # Wait for service
     wait_for_service(args.base_url)

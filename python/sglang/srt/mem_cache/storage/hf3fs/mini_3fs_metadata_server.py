@@ -15,6 +15,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from sglang.srt.mem_cache.storage.hf3fs.storage_hf3fs import Hf3fsMetadataInterface
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 
 # --- Configuration ---
 logging.basicConfig(
@@ -304,7 +305,8 @@ class Hf3fsMetadataServer:
 
         import uvicorn
 
-        logging.info(f"Starting metadata server on http://{host}:{port}")
+        wrapped_host = maybe_wrap_ipv6_address(str(host))
+        logging.info(f"Starting metadata server on http://{wrapped_host}:{port}")
         if self.state.persistence_path:
             logging.info(
                 f"Persistence is ENABLED. Saving to '{self.state.persistence_path}' every {self.state.save_interval} seconds."

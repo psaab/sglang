@@ -9,6 +9,7 @@ from sglang.srt.entrypoints.EngineBase import EngineBase
 from sglang.srt.entrypoints.http_server import launch_server
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils import MultiprocessingSerializer, kill_process_tree
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 
 
 def launch_server_process(server_args: ServerArgs) -> multiprocessing.Process:
@@ -52,7 +53,7 @@ class HttpServerEngineAdapter(EngineBase):
     def __init__(self, **kwargs):
         self.server_args = ServerArgs(**kwargs)
         print(
-            f"Launch HttpServerEngineAdapter at: {self.server_args.host}:{self.server_args.port}"
+            f"Launch HttpServerEngineAdapter at: {maybe_wrap_ipv6_address(self.server_args.host)}:{self.server_args.port}"
         )
         self.process = launch_server_process(self.server_args)
 
@@ -64,7 +65,7 @@ class HttpServerEngineAdapter(EngineBase):
         Returns:
             The JSON response from the server
         """
-        url = f"http://{self.server_args.host}:{self.server_args.port}/{endpoint}"
+        url = f"http://{maybe_wrap_ipv6_address(self.server_args.host)}:{self.server_args.port}/{endpoint}"
         response = requests.post(url, json=payload or {})
         response.raise_for_status()
         return response.json()
