@@ -292,7 +292,7 @@ class DataParallelController:
         # Determine the endpoint for inter-node communication
         if server_args.dist_init_addr is None:
             endpoint = format_tcp_address(
-                server_args.host or "127.0.0.1",
+                server_args.host or "::1",
                 server_args.port + DP_ATTENTION_HANDSHAKE_PORT_DELTA,
             )
         else:

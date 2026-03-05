@@ -785,7 +785,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             dist_init_method = format_tcp_address(host, port)
         else:
             dist_init_method = format_tcp_address(
-                self.server_args.host or "127.0.0.1", self.dist_port
+                self.server_args.host or "::1", self.dist_port
             )
         set_custom_all_reduce(not self.server_args.disable_custom_all_reduce)
         set_mscclpp_all_reduce(self.server_args.enable_mscclpp)

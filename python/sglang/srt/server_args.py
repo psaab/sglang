@@ -302,7 +302,7 @@ class ServerArgs:
     model_impl: str = "auto"
 
     # HTTP server
-    host: str = "127.0.0.1"
+    host: str = "::1"
     port: int = 30000
     fastapi_root_path: str = ""
     grpc_mode: bool = False
@@ -6072,7 +6072,7 @@ class PortArgs:
             # DP attention. Use TCP + port to handle both single-node and multi-node.
             if server_args.nnodes == 1 and server_args.dist_init_addr is None:
                 dist_init_addr = (
-                    maybe_wrap_ipv6_address(server_args.host or "127.0.0.1"),
+                    maybe_wrap_ipv6_address(server_args.host or "::1"),
                     server_args.port + ZMQ_TCP_PORT_DELTA,
                 )
             elif server_args.dist_init_addr.startswith("["):  # ipv6 address
