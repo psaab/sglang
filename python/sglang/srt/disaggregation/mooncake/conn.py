@@ -933,7 +933,7 @@ class MooncakeKVManager(CommonKVManager):
                                         len(kv_chunk.prefill_kv_indices),
                                         len(chunked_dst_kv_indice),
                                         kv_chunk.index_slice,
-                                        kv_chunk.is_last_chunk,
+                                        kv_chunk.is_last,
                                         "mla"
                                         if self.is_mla_backend
                                         else "mha",
