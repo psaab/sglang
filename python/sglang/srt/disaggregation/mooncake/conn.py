@@ -620,8 +620,18 @@ class MooncakeKVManager(CommonKVManager):
         aux_index: int,
         data: bytes,
     ):
+        endpoint = format_tcp_address(remote, dst_port)
+        logger.debug(
+            "Sending aux data: endpoint=%s, room=%s, "
+            "buffer_index=%d, aux_index=%d, data_len=%d",
+            endpoint,
+            room,
+            buffer_index,
+            aux_index,
+            len(data),
+        )
         socket = self._connect(
-            format_tcp_address(remote, dst_port), is_ipv6=is_valid_ipv6_address(remote)
+            endpoint, is_ipv6=is_valid_ipv6_address(remote)
         )
 
         socket.send_multipart(
@@ -827,8 +837,17 @@ class MooncakeKVManager(CommonKVManager):
     def sync_status_to_decode_endpoint(
         self, remote: str, dst_port: int, room: int, status: int, prefill_rank: int
     ):
+        endpoint = format_tcp_address(remote, dst_port)
+        logger.debug(
+            "Syncing status to decode: endpoint=%s, room=%s, "
+            "status=%d, prefill_rank=%d",
+            endpoint,
+            room,
+            status,
+            prefill_rank,
+        )
         self._connect(
-            format_tcp_address(remote, dst_port), is_ipv6=is_valid_ipv6_address(remote)
+            endpoint, is_ipv6=is_valid_ipv6_address(remote)
         ).send_multipart(
             [
                 str(room).encode("ascii"),
@@ -1389,6 +1408,18 @@ class MooncakeKVReceiver(CommonKVReceiver):
 
             sock, lock = self._connect_to_bootstrap_server(bootstrap_info)
             with lock:
+                logger.debug(
+                    "Sending decode registration: bootstrap=%s, "
+                    "local_ip=%s, rank_port=%d, session_id=%s, "
+                    "tp_rank=%d, attn_tp_size=%d, kv_item_len=%d",
+                    bootstrap_info.get("bootstrap_addr", "unknown"),
+                    self.kv_mgr.local_ip,
+                    self.kv_mgr.rank_port,
+                    self.session_id,
+                    tp_rank,
+                    self.kv_mgr.attn_tp_size,
+                    kv_item_len,
+                )
                 sock.send_multipart(
                     [
                         "None".encode("ascii"),
@@ -1425,6 +1456,16 @@ class MooncakeKVReceiver(CommonKVReceiver):
             is_dummy = bootstrap_info["is_dummy"]
 
             with lock:
+                logger.debug(
+                    "Sending decode init: bootstrap=%s, "
+                    "room=%s, session_id=%s, "
+                    "is_dummy=%s, num_kv_indices=%d",
+                    bootstrap_info.get("bootstrap_addr", "unknown"),
+                    self.bootstrap_room,
+                    self.session_id,
+                    is_dummy,
+                    len(kv_indices),
+                )
                 sock.send_multipart(
                     [
                         str(self.bootstrap_room).encode("ascii"),
