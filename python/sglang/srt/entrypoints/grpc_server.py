@@ -54,6 +54,7 @@ from sglang.srt.managers.schedule_batch import Modality, MultimodalDataItem
 from sglang.srt.sampling.sampling_params import SamplingParams as SGLSamplingParams
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils import kill_process_tree
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 from sglang.utils import get_exception_traceback
 
 logger = logging.getLogger(__name__)
@@ -1112,7 +1113,7 @@ async def serve_grpc(
         bootstrap_server = start_disagg_service(server_args)
         if bootstrap_server:
             logger.info(
-                f"Bootstrap server started for disaggregation mode on {server_args.host}:{server_args.disaggregation_bootstrap_port}"
+                f"Bootstrap server started for disaggregation mode on {maybe_wrap_ipv6_address(server_args.host)}:{server_args.disaggregation_bootstrap_port}"
             )
 
     # Launch only the scheduler process(es) (no tokenizer/detokenizer needed for gRPC)
@@ -1209,7 +1210,7 @@ async def serve_grpc(
     reflection.enable_server_reflection(SERVICE_NAMES, server)
 
     # Start server
-    listen_addr = f"{server_args.host}:{server_args.port}"
+    listen_addr = f"{maybe_wrap_ipv6_address(server_args.host)}:{server_args.port}"
     if server_args.ssl_certfile and server_args.ssl_keyfile:
         if server_args.ssl_keyfile_password:
             raise ValueError(

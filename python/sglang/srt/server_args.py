@@ -60,8 +60,10 @@ from sglang.srt.utils.common import (
     is_triton_kernels_available,
     is_valid_ipv6_address,
     json_list_type,
+    maybe_wrap_ipv6_address,
     nullable_str,
     parse_connector_type,
+    parse_host_port,
     torch_release,
     wait_port_available,
     xpu_has_xmx_support,
@@ -6137,12 +6139,16 @@ class PortArgs:
         else:
             # DP attention. Use TCP + port to handle both single-node and multi-node.
             if server_args.nnodes == 1 and server_args.dist_init_addr is None:
-                dist_init_addr = ("127.0.0.1", server_args.port + ZMQ_TCP_PORT_DELTA)
+                dist_init_addr = (
+                    maybe_wrap_ipv6_address(server_args.host or "127.0.0.1"),
+                    server_args.port + ZMQ_TCP_PORT_DELTA,
+                )
             elif server_args.dist_init_addr.startswith("["):  # ipv6 address
                 port_num, host = configure_ipv6(server_args.dist_init_addr)
                 dist_init_addr = (host, str(port_num))
             else:
-                dist_init_addr = server_args.dist_init_addr.split(":")
+                host, port_num = parse_host_port(server_args.dist_init_addr)
+                dist_init_addr = (host, str(port_num))
 
             assert (
                 len(dist_init_addr) == 2

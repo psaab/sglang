@@ -42,6 +42,8 @@ from sglang.srt.utils import (
     get_zmq_socket_on_host,
     is_valid_ipv6_address,
     maybe_wrap_ipv6_address,
+    parse_host_port,
+    resolve_hostname,
 )
 
 logger = logging.getLogger(__name__)
@@ -255,13 +257,11 @@ class CommonKVManager(BaseKVManager):
         """Register prefill server info to bootstrap server via HTTP POST."""
         if self.dist_init_addr:
             # Multi-node case: bootstrap server's host is dist_init_addr
-            if self.dist_init_addr.startswith("["):  # [ipv6]:port or [ipv6]
-                if self.dist_init_addr.endswith("]"):
-                    host = self.dist_init_addr
-                else:
-                    host, _ = self.dist_init_addr.rsplit(":", 1)
-            else:
-                host = socket.gethostbyname(self.dist_init_addr.rsplit(":", 1)[0])
+            host, _ = parse_host_port(self.dist_init_addr)
+            # For non-IPv6, resolve hostname to IP
+            if not host.startswith("["):
+                host = resolve_hostname(host)
+                host = maybe_wrap_ipv6_address(host)
         else:
             # Single-node case: bootstrap server's host is the same as http server's host
             host = self.bootstrap_host
