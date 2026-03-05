@@ -982,9 +982,18 @@ class MooncakeKVManager(CommonKVManager):
                         if arrived_response_num == expected_response_num:
                             self.update_status(bootstrap_room, KVPoll.Success)
                 elif status == KVPoll.Failed:
+                    prefill_addr = next(
+                        (
+                            addr
+                            for addr, rooms in self.addr_to_rooms_tracker.items()
+                            if bootstrap_room in rooms
+                        ),
+                        "unknown",
+                    )
                     self.record_failure(
                         bootstrap_room,
-                        "Failed to get kvcache from prefill instance, it might be dead",
+                        f"Failed to get kvcache from prefill instance at {prefill_addr} "
+                        f"(room={bootstrap_room}), it might be dead",
                     )
                     self.update_status(bootstrap_room, status)
 
