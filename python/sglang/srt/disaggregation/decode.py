@@ -366,7 +366,9 @@ class DecodePreallocQueue:
         if _is_fake_transfer(req, self.scheduler.server_args):
             return 0
 
-        bootstrap_addr = f"{maybe_wrap_ipv6_address(req.bootstrap_host)}:{req.bootstrap_port}"
+        bootstrap_addr = (
+            f"{maybe_wrap_ipv6_address(req.bootstrap_host)}:{req.bootstrap_port}"
+        )
 
         prefill_info = self.kv_manager.prefill_info_table.get(bootstrap_addr)
         if prefill_info is None:

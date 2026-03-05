@@ -53,7 +53,6 @@ from sglang.srt.utils.common import (
     get_zmq_socket,
     kill_itself_when_parent_died,
     maybe_reindex_device_id,
-    maybe_wrap_ipv6_address,
     parse_host_port,
 )
 from sglang.srt.utils.torch_memory_saver_adapter import TorchMemorySaverAdapter

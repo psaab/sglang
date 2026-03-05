@@ -1654,16 +1654,12 @@ def run_benchmark(args_: argparse.Namespace):
     _host_base = f"http://{_host}:{args.port}"
 
     model_url = (
-        f"{args.base_url}/v1/models"
-        if args.base_url
-        else f"{_host_base}/v1/models"
+        f"{args.base_url}/v1/models" if args.base_url else f"{_host_base}/v1/models"
     )
 
     if args.backend in ["sglang", "sglang-native"]:
         api_url = (
-            f"{args.base_url}/generate"
-            if args.base_url
-            else f"{_host_base}/generate"
+            f"{args.base_url}/generate" if args.base_url else f"{_host_base}/generate"
         )
     elif args.backend in ["sglang-oai", "vllm", "lmdeploy"]:
         api_url = (

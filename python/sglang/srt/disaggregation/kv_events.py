@@ -243,7 +243,8 @@ class ZmqEventPublisher(EventPublisher):
             # bind stable, connect volatile convention
             if (
                 "*" in self._endpoint
-                or self._endpoint.startswith("tcp://[::]:") or self._endpoint == "tcp://[::]"
+                or self._endpoint.startswith("tcp://[::]:")
+                or self._endpoint == "tcp://[::]"
                 or self._endpoint.startswith("ipc://")
                 or self._endpoint.startswith("inproc://")
             ):

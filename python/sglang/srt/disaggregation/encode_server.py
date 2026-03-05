@@ -47,7 +47,6 @@ from sglang.srt.utils import (
     format_tcp_address,
     get_local_ip_auto,
     get_zmq_socket,
-    is_valid_ipv6_address,
     load_audio,
     load_image,
     load_video,

@@ -616,9 +616,7 @@ class MooncakeKVManager(CommonKVManager):
             aux_index,
             len(data),
         )
-        socket = self._connect(
-            endpoint, is_ipv6=is_valid_ipv6_address(remote)
-        )
+        socket = self._connect(endpoint, is_ipv6=is_valid_ipv6_address(remote))
 
         try:
             socket.send_multipart(
@@ -987,12 +985,8 @@ class MooncakeKVManager(CommonKVManager):
                                         len(chunked_dst_kv_indice),
                                         kv_chunk.index_slice,
                                         kv_chunk.is_last_chunk,
-                                        "mla"
-                                        if self.is_mla_backend
-                                        else "mha",
-                                        self.session_failures[
-                                            req.mooncake_session_id
-                                        ],
+                                        "mla" if self.is_mla_backend else "mha",
+                                        self.session_failures[req.mooncake_session_id],
                                     )
                             self.record_failure(
                                 kv_chunk.room,
@@ -1466,8 +1460,7 @@ class MooncakeKVReceiver(CommonKVReceiver):
                         ]
                     )
                     logger.warning(
-                        "Sent decode registration: bootstrap=%s, "
-                        "session_id=%s",
+                        "Sent decode registration: bootstrap=%s, " "session_id=%s",
                         bootstrap_addr,
                         self.session_id,
                     )
