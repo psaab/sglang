@@ -740,27 +740,33 @@ def wait_port_available(
 
 def is_port_available(port):
     """Return whether a port is available."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
+    # try ipv6 first, then fall back to ipv4
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(("", port))
             s.listen(1)
             return True
-        except socket.error:
-            return False
-        except OverflowError:
-            return False
+    except (socket.error, OverflowError):
+        pass
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("", port))
+            s.listen(1)
+            return True
+    except (socket.error, OverflowError):
+        return False
 
 
 def get_free_port():
-    # try ipv4
+    # try ipv6 first, then fall back to ipv4
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
             s.bind(("", 0))
             return s.getsockname()[1]
     except OSError:
-        # try ipv6
-        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("", 0))
             return s.getsockname()[1]
 
@@ -1475,6 +1481,8 @@ def get_zmq_socket_on_host(
     socket = context.socket(socket_type)
     # Bind to random TCP port
     config_socket(socket, socket_type)
+    if host and host.find("[") != -1:
+        socket.setsockopt(zmq.IPV6, 1)
     bind_host = f"tcp://{host}" if host else "tcp://*"
     port = socket.bind_to_random_port(bind_host)
     return port, socket
@@ -1678,8 +1686,17 @@ def _get_fastapi_request_path(request) -> Tuple[str, bool]:
 
 def bind_port(port):
     """Bind to a specific port, assuming it's available."""
+    # try ipv6 first, then fall back to ipv4
+    try:
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("", port))
+        sock.listen(1)
+        return sock
+    except OSError:
+        sock.close()
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Allows address reuse
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("", port))
     sock.listen(1)
     return sock
@@ -2589,21 +2606,27 @@ def get_open_port() -> int:
     if port is not None:
         port = int(port)
         while True:
+            # try ipv6 first, then fall back to ipv4
+            try:
+                with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+                    s.bind(("", port))
+                    return port
+            except OSError:
+                pass
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.bind(("", port))
                     return port
             except OSError:
-                port += 1  # Increment port number if already in use
+                port += 1
                 logger.info("Port %d is already in use, trying port %d", port - 1, port)
-    # try ipv4
+    # try ipv6 first, then fall back to ipv4
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
             s.bind(("", 0))
             return s.getsockname()[1]
     except OSError:
-        # try ipv6
-        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("", 0))
             return s.getsockname()[1]
 
@@ -2624,6 +2647,29 @@ def maybe_wrap_ipv6_address(address: str) -> str:
 
 def format_tcp_address(ip: str, port: int) -> str:
     return f"tcp://{maybe_wrap_ipv6_address(ip)}:{port}"
+
+
+def resolve_hostname(hostname: str) -> str:
+    """Resolve a hostname to an IP address using getaddrinfo (supports both IPv4 and IPv6)."""
+    infos = socket.getaddrinfo(hostname, None)
+    return infos[0][4][0]
+
+
+def parse_host_port(addr: str) -> Tuple[str, int]:
+    """Parse a host:port string, handling IPv6 addresses.
+
+    For bracketed IPv6 (e.g. ``[::1]:8000``), delegates to :func:`configure_ipv6`.
+    For plain ``host:port``, splits on the last colon.
+
+    Returns ``(host, port)`` where *host* is already wrapped in ``[]`` when the
+    address is IPv6.
+    """
+    if addr.startswith("["):
+        port, host = configure_ipv6(addr)
+        return host, port
+    else:
+        host, port_str = addr.rsplit(":", 1)
+        return host, int(port_str)
 
 
 def configure_ipv6(dist_init_addr):
@@ -2706,14 +2752,14 @@ def launch_dummy_health_check_server(host, port, enable_metrics):
             logger.error(f"Dummy health check server failed to start: {e}")
             raise
         finally:
-            logger.info(f"Dummy health check server stopped at {host}:{port}")
+            logger.info(f"Dummy health check server stopped at {maybe_wrap_ipv6_address(host)}:{port}")
 
     thread = threading.Thread(
         target=run_server, daemon=True, name="health-check-server"
     )
     thread.start()
     logger.info(
-        f"Dummy health check server started in background thread at {host}:{port}"
+        f"Dummy health check server started in background thread at {maybe_wrap_ipv6_address(host)}:{port}"
     )
 
 
@@ -2903,7 +2949,7 @@ def get_local_ip_by_nic(interface: str = None) -> Optional[str]:
         if netifaces.AF_INET in addresses:
             for addr_info in addresses[netifaces.AF_INET]:
                 ip = addr_info.get("addr")
-                if ip and ip != "127.0.0.1" and ip != "0.0.0.0":
+                if ip and ip not in ("127.0.0.1", "0.0.0.0", "::1"):
                     return ip
         if netifaces.AF_INET6 in addresses:
             for addr_info in addresses[netifaces.AF_INET6]:
@@ -2928,8 +2974,8 @@ def get_local_ip_by_remote() -> Optional[str]:
 
     try:
         hostname = socket.gethostname()
-        ip = socket.gethostbyname(hostname)
-        if ip and ip != "127.0.0.1" and ip != "0.0.0.0":
+        ip = resolve_hostname(hostname)
+        if ip and ip not in ("127.0.0.1", "0.0.0.0", "::1"):
             return ip
     except Exception:
         pass

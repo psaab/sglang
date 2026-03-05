@@ -124,6 +124,8 @@ def dump_state_text(filename: str, states: list, mode: str = "w"):
 
 
 def normalize_base_url(host: str, port: int) -> str:
+    from sglang.srt.utils.common import is_valid_ipv6_address
+
     if host.startswith("http://") or host.startswith("https://"):
         warnings.warn(
             f"Including the scheme in --host ('{host}') is deprecated. "
@@ -132,7 +134,10 @@ def normalize_base_url(host: str, port: int) -> str:
             stacklevel=2,
         )
     else:
-        host = f"http://{host}"
+        if is_valid_ipv6_address(host):
+            host = f"http://[{host}]"
+        else:
+            host = f"http://{host}"
     return f"{host}:{port}"
 
 
