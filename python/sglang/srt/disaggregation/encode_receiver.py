@@ -26,6 +26,7 @@ from sglang.srt.managers.multimodal_processor import get_mm_processor, import_pr
 from sglang.srt.managers.schedule_batch import Req
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils import ImageData, get_local_ip_auto, get_zmq_socket_on_host
+from sglang.srt.utils.common import maybe_wrap_ipv6_address
 from sglang.srt.utils.hf_transformers_utils import get_processor
 
 logger = logging.getLogger(__name__)
@@ -254,7 +255,7 @@ class WaitingImageRequest:
                     payload = {
                         "req_id": req_id,
                         "receive_count": receive_count,
-                        "receive_url": f"{host_name}:{embedding_port}",
+                        "receive_url": f"{maybe_wrap_ipv6_address(host_name)}:{embedding_port}",
                     }
 
                     logger.info(f"Preparing to send  to {target_url}")

@@ -1393,7 +1393,7 @@ def _execute_grpc_server_warmup(server_args: ServerArgs):
     """Execute warmup for gRPC server by checking health and sending test request."""
     try:
         # Connect to the gRPC server
-        grpc_url = f"{server_args.host}:{server_args.port}"
+        grpc_url = f"{maybe_wrap_ipv6_address(server_args.host)}:{server_args.port}"
         channel = grpc.insecure_channel(
             grpc_url,
             options=[

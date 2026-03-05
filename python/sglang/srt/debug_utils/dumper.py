@@ -1044,7 +1044,10 @@ def _create_zmq_rpc_broadcast(
     sock = ctx.socket(zmq.REP)
     sock.bind("tcp://*:0")
     bound_port = int(sock.getsockopt_string(zmq.LAST_ENDPOINT).rsplit(":", 1)[1])
-    local_addr = f"tcp://{_get_local_ip_by_remote()}:{bound_port}"
+    local_ip = _get_local_ip_by_remote()
+    if local_ip and ":" in local_ip:
+        local_ip = f"[{local_ip}]"
+    local_addr = f"tcp://{local_ip}:{bound_port}"
 
     def serve_loop():
         while True:

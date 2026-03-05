@@ -18,6 +18,7 @@ from sglang.srt.server_args import (
     set_global_server_args_for_scheduler,
 )
 from sglang.srt.utils import get_local_ip_auto
+from sglang.srt.utils.common import format_tcp_address
 
 PORT_BASE = envs.SGLANG_BACKUP_PORT_BASE.get()
 logger = logging.getLogger(__name__)
@@ -48,11 +49,11 @@ class ExpertBackupManager:
         # Synchronization socket to avoid PUB/SUB slow joiner issues.
         self.recv_from_expert_backup_client = context.socket(zmq.PULL)
         self.recv_from_expert_backup_client.bind(
-            f"tcp://{get_local_ip_auto()}:{PORT_BASE + server_args.node_rank * 2}"
+            format_tcp_address(get_local_ip_auto(), PORT_BASE + server_args.node_rank * 2)
         )
         self.send_to_expert_backup_client = context.socket(zmq.PUB)
         self.send_to_expert_backup_client.bind(
-            f"tcp://{get_local_ip_auto()}:{PORT_BASE + server_args.node_rank * 2 + 1}"
+            format_tcp_address(get_local_ip_auto(), PORT_BASE + server_args.node_rank * 2 + 1)
         )
         self.backup_weights_from_disk()
         self.start_transfer_server()
