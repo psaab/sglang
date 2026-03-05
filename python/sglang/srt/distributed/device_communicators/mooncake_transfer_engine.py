@@ -113,7 +113,7 @@ class MooncakeTransferEngine:
         self.gpu_id = gpu_id if gpu_id is not None else 0
         self.ib_device = get_ib_devices_for_gpu(ib_device, self.gpu_id)
 
-        logger.info(
+        logger.warning(
             "Initializing MooncakeTransferEngine: hostname=%s, gpu_id=%d, "
             "ib_device=%s",
             self.hostname,
@@ -127,7 +127,7 @@ class MooncakeTransferEngine:
         self.session_id = (
             f"{maybe_wrap_ipv6_address(self.hostname)}:{self.engine.get_rpc_port()}"
         )
-        logger.info(
+        logger.warning(
             "MooncakeTransferEngine initialized: session_id=%s, rpc_port=%d",
             self.session_id,
             self.engine.get_rpc_port(),
