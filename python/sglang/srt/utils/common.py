@@ -2975,9 +2975,19 @@ def get_local_ip_by_nic(interface: str = None) -> Optional[str]:
 
 
 def get_local_ip_by_remote() -> Optional[str]:
-    # try ipv4
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # try ipv6 first (works on both dual-stack and ipv6-only networks)
     try:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        # Google's public DNS server, see
+        # https://developers.google.com/speed/public-dns/docs/using#addresses
+        s.connect(("2001:4860:4860::8888", 80))  # Doesn't need to be reachable
+        return s.getsockname()[0]
+    except Exception:
+        pass
+
+    # fall back to ipv4
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))  # Doesn't need to be reachable
         return s.getsockname()[0]
     except Exception:
@@ -2991,15 +3001,7 @@ def get_local_ip_by_remote() -> Optional[str]:
     except Exception:
         pass
 
-    # try ipv6
-    try:
-        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        # Google's public DNS server, see
-        # https://developers.google.com/speed/public-dns/docs/using#addresses
-        s.connect(("2001:4860:4860::8888", 80))  # Doesn't need to be reachable
-        return s.getsockname()[0]
-    except Exception:
-        logger.warning("Can not get local ip by remote")
+    logger.warning("Can not get local ip by remote")
     return None
 
 
