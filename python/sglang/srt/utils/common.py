@@ -1477,10 +1477,19 @@ def get_zmq_socket_on_host(
     socket = context.socket(socket_type)
     # Bind to random TCP port
     config_socket(socket, socket_type)
-    if host and host.find("[") != -1:
+    is_ipv6 = host and "[" in host
+    if is_ipv6:
         socket.setsockopt(zmq.IPV6, 1)
     bind_host = f"tcp://{host}" if host else "tcp://*"
-    port = socket.bind_to_random_port(bind_host)
+    try:
+        port = socket.bind_to_random_port(bind_host)
+    except zmq.ZMQError:
+        # If binding to a specific address fails (e.g., address not assigned
+        # to any local interface), fall back to binding all interfaces.
+        logger.warning(
+            f"Failed to bind ZMQ socket to {bind_host}, falling back to tcp://*"
+        )
+        port = socket.bind_to_random_port("tcp://*")
     return port, socket
 
 
