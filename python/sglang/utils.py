@@ -403,15 +403,16 @@ def reserve_port(host, start=30000, end=40000):
     random.shuffle(candidates)
 
     for port in candidates:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            # Attempt to bind to the port on localhost
-            sock.bind((host, port))
-            return port, sock
-        except socket.error:
-            sock.close()  # Failed to bind, try next port
-            continue
+        # Try IPv6 first, fall back to IPv4
+        for family in (socket.AF_INET6, socket.AF_INET):
+            sock = socket.socket(family, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind((host, port))
+                return port, sock
+            except socket.error:
+                sock.close()
+                continue
     raise RuntimeError("No free port available.")
 
 
