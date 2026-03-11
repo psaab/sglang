@@ -1042,9 +1042,14 @@ def _create_zmq_rpc_broadcast(
 
     ctx = zmq.Context()
     sock = ctx.socket(zmq.REP)
+    local_ip = _get_local_ip_by_remote()
+    _is_ipv6 = local_ip and ":" in local_ip
+    if _is_ipv6:
+        sock.setsockopt(zmq.IPV6, 1)
+        local_ip = f"[{local_ip}]"
     sock.bind("tcp://*:0")
     bound_port = int(sock.getsockopt_string(zmq.LAST_ENDPOINT).rsplit(":", 1)[1])
-    local_addr = f"tcp://{_get_local_ip_by_remote()}:{bound_port}"
+    local_addr = f"tcp://{local_ip}:{bound_port}"
 
     def serve_loop():
         while True:
@@ -1076,6 +1081,8 @@ def _create_zmq_rpc_broadcast(
         handles = []
         for i, addr in enumerate(all_addresses):
             req_socket = ctx.socket(zmq.REQ)
+            if "[" in addr:
+                req_socket.setsockopt(zmq.IPV6, 1)
             req_socket.connect(addr)
             handles.append(_ZmqRpcHandle(req_socket, debug_name=f"rank-{i}"))
         return _ZmqRpcBroadcast(handles)
@@ -1142,23 +1149,7 @@ class _ZmqRpcBroadcast(_RpcBroadcastBase):
 
 
 def _get_local_ip_by_remote() -> Optional[str]:
-    # try ipv4
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))  # Doesn't need to be reachable
-        return s.getsockname()[0]
-    except Exception:
-        pass
-
-    try:
-        hostname = socket.gethostname()
-        ip = socket.gethostbyname(hostname)
-        if ip and ip != "127.0.0.1" and ip != "0.0.0.0":
-            return ip
-    except Exception:
-        pass
-
-    # try ipv6
+    # try ipv6 first
     try:
         s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         # Google's public DNS server, see
@@ -1166,7 +1157,25 @@ def _get_local_ip_by_remote() -> Optional[str]:
         s.connect(("2001:4860:4860::8888", 80))  # Doesn't need to be reachable
         return s.getsockname()[0]
     except Exception:
-        print("Can not get local ip by remote")
+        pass
+
+    # fall back to ipv4
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # Doesn't need to be reachable
+        return s.getsockname()[0]
+    except Exception:
+        pass
+
+    try:
+        hostname = socket.gethostname()
+        ip = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG)[0][4][0]
+        if ip and ip not in ("127.0.0.1", "0.0.0.0", "::1"):
+            return ip
+    except Exception:
+        pass
+
+    print("Can not get local ip by remote")
     return None
 
 
