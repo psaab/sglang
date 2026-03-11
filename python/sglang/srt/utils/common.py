@@ -1523,7 +1523,15 @@ def get_zmq_socket_on_host(
             bind_host = f"tcp://{host}"
     else:
         bind_host = "tcp://*"
-    port = socket.bind_to_random_port(bind_host)
+    try:
+        port = socket.bind_to_random_port(bind_host)
+    except zmq.ZMQError:
+        # If binding to a specific address fails (e.g., address not assigned
+        # to any local interface), fall back to binding all interfaces.
+        logger.warning(
+            f"Failed to bind ZMQ socket to {bind_host}, falling back to tcp://*"
+        )
+        port = socket.bind_to_random_port("tcp://*")
     return port, socket
 
 
