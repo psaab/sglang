@@ -61,6 +61,7 @@ from sglang.srt.mem_cache.memory_pool import (
     ReqToTokenPool,
 )
 from sglang.srt.mem_cache.swa_memory_pool import SWAKVPool
+from sglang.srt.utils.network import NetworkAddress
 from sglang.srt.observability.req_time_stats import (
     set_schedule_time_batch,
     set_time_batch,
@@ -365,7 +366,7 @@ class DecodePreallocQueue:
         if _is_fake_transfer(req, self.scheduler.server_args):
             return 0
 
-        bootstrap_addr = f"{req.bootstrap_host}:{req.bootstrap_port}"
+        bootstrap_addr = NetworkAddress(req.bootstrap_host, req.bootstrap_port).to_host_port_str()
 
         prefill_info = self.kv_manager.prefill_info_table.get(bootstrap_addr)
         if prefill_info is None:
@@ -389,7 +390,7 @@ class DecodePreallocQueue:
 
         kv_receiver = kv_receiver_class(
             mgr=self.kv_manager,
-            bootstrap_addr=f"{req.bootstrap_host}:{req.bootstrap_port}",
+            bootstrap_addr=NetworkAddress(req.bootstrap_host, req.bootstrap_port).to_host_port_str(),
             bootstrap_room=req.bootstrap_room,
             prefill_dp_rank=prefill_dp_rank,
         )
@@ -501,7 +502,9 @@ class DecodePreallocQueue:
         # Group pending requests by bootstrap_addr
         addr_to_reqs: Dict[str, List[Req]] = {}
         for req in self.pending_reqs:
-            addr = f"{req.bootstrap_host}:{req.bootstrap_port}"
+            addr = NetworkAddress(
+                req.bootstrap_host, req.bootstrap_port
+            ).to_host_port_str()
             addr_to_reqs.setdefault(addr, []).append(req)
 
         resolved = []
