@@ -6167,7 +6167,10 @@ class PortArgs:
         else:
             # DP attention. Use TCP + port to handle both single-node and multi-node.
             if server_args.nnodes == 1 and server_args.dist_init_addr is None:
-                na = NetworkAddress("127.0.0.1", server_args.port + ZMQ_TCP_PORT_DELTA)
+                na = NetworkAddress(
+                    server_args.host or "127.0.0.1",
+                    server_args.port + ZMQ_TCP_PORT_DELTA,
+                )
             else:
                 na = NetworkAddress.parse(server_args.dist_init_addr)
 
