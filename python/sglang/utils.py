@@ -124,6 +124,8 @@ def dump_state_text(filename: str, states: list, mode: str = "w"):
 
 
 def normalize_base_url(host: str, port: int) -> str:
+    from sglang.srt.utils.network import NetworkAddress
+
     if host.startswith("http://") or host.startswith("https://"):
         warnings.warn(
             f"Including the scheme in --host ('{host}') is deprecated. "
@@ -131,9 +133,8 @@ def normalize_base_url(host: str, port: int) -> str:
             DeprecationWarning,
             stacklevel=2,
         )
-    else:
-        host = f"http://{host}"
-    return f"{host}:{port}"
+        return f"{host}:{port}"
+    return NetworkAddress(host, port).to_url()
 
 
 class HttpResponse:
@@ -404,16 +405,18 @@ def reserve_port(host, start=30000, end=40000):
     candidates = list(range(start, end))
     random.shuffle(candidates)
 
+    from sglang.srt.utils.common import get_addrinfos_for_bind
+
     for port in candidates:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            # Attempt to bind to the port on localhost
-            sock.bind((host, port))
-            return port, sock
-        except socket.error:
-            sock.close()  # Failed to bind, try next port
-            continue
+        for family, socktype, proto, _, sockaddr in get_addrinfos_for_bind(host, port):
+            sock = socket.socket(family, socktype, proto)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(sockaddr)
+                return port, sock
+            except socket.error:
+                sock.close()
+                continue
     raise RuntimeError("No free port available.")
 
 
