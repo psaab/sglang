@@ -1149,24 +1149,26 @@ class _ZmqRpcBroadcast(_RpcBroadcastBase):
 
 
 def _get_local_ip_by_remote() -> Optional[str]:
-    # try ipv6 first
-    try:
-        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        # Google's public DNS server, see
-        # https://developers.google.com/speed/public-dns/docs/using#addresses
-        s.connect(("2001:4860:4860::8888", 80))  # Doesn't need to be reachable
-        return s.getsockname()[0]
-    except Exception:
-        pass
+    # Google's public DNS servers, used to discover the local IP.
+    # UDP connect doesn't send packets; it just selects the right source address.
+    # https://developers.google.com/speed/public-dns/docs/using#addresses
+    for dns_host, dns_port in [("8.8.8.8", 80), ("2001:4860:4860::8888", 80)]:
+        try:
+            family, socktype, proto, _, sockaddr = socket.getaddrinfo(
+                dns_host,
+                dns_port,
+                socket.AF_UNSPEC,
+                socket.SOCK_DGRAM,
+                0,
+                socket.AI_ADDRCONFIG,
+            )[0]
+            with socket.socket(family, socktype, proto) as s:
+                s.connect(sockaddr)
+                return s.getsockname()[0]
+        except (socket.gaierror, OSError):
+            continue
 
-    # fall back to ipv4
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))  # Doesn't need to be reachable
-        return s.getsockname()[0]
-    except Exception:
-        pass
-
+    # Fallback: resolve the local hostname to an IP address via /etc/hosts or DNS.
     try:
         hostname = socket.gethostname()
         ip = socket.getaddrinfo(
