@@ -2742,6 +2742,7 @@ def launch_dummy_health_check_server(host, port, enable_metrics):
 
     import uvicorn
     from fastapi import FastAPI, Response
+
     from sglang.srt.utils.network import NetworkAddress
 
     app = FastAPI()
@@ -2786,7 +2787,9 @@ def launch_dummy_health_check_server(host, port, enable_metrics):
             logger.error(f"Dummy health check server failed to start: {e}")
             raise
         finally:
-            logger.info(f"Dummy health check server stopped at {NetworkAddress(host, port).to_host_port_str()}")
+            logger.info(
+                f"Dummy health check server stopped at {NetworkAddress(host, port).to_host_port_str()}"
+            )
 
     thread = threading.Thread(
         target=run_server, daemon=True, name="health-check-server"

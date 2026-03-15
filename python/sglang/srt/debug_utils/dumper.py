@@ -1169,7 +1169,9 @@ def _get_local_ip_by_remote() -> Optional[str]:
 
     try:
         hostname = socket.gethostname()
-        ip = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG)[0][4][0]
+        ip = socket.getaddrinfo(
+            hostname, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG
+        )[0][4][0]
         if ip and ip not in ("127.0.0.1", "0.0.0.0", "::1"):
             return ip
     except Exception:

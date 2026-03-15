@@ -960,7 +960,14 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             == RemoteInstanceWeightLoaderBackend.NCCL
         ):
             if self.tp_rank == 0:
-                instance_ip = socket.getaddrinfo(socket.gethostname(), None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG)[0][4][0]
+                instance_ip = socket.getaddrinfo(
+                    socket.gethostname(),
+                    None,
+                    socket.AF_UNSPEC,
+                    0,
+                    0,
+                    socket.AI_ADDRCONFIG,
+                )[0][4][0]
                 t = threading.Thread(
                     target=trigger_init_weights_send_group_for_remote_instance_request,
                     args=(
@@ -1241,9 +1248,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             )
             dist.barrier(group=self._weights_send_group[group_name])
             success = True
-            message = (
-                f"Succeeded to init group through {na.to_host_port_str()} group."
-            )
+            message = f"Succeeded to init group through {na.to_host_port_str()} group."
         except Exception as e:
             message = f"Failed to init group: {e}."
             logger.error(message)

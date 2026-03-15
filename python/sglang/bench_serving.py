@@ -1767,11 +1767,7 @@ def run_benchmark(args_: argparse.Namespace):
             print("Please provide a model using `--model` when using `trt` backend.")
             sys.exit(1)
     elif args.backend == "gserver":
-        api_url = (
-            args.base_url
-            if args.base_url
-            else _na.to_host_port_str()
-        )
+        api_url = args.base_url if args.base_url else _na.to_host_port_str()
         args.model = args.model or "default"
     elif args.backend == "truss":
         api_url = (

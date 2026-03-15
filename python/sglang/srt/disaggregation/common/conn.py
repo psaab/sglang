@@ -254,7 +254,9 @@ class CommonKVManager(BaseKVManager):
             na = NetworkAddress.parse(self.dist_init_addr)
             # Resolve hostname to IP if needed (getaddrinfo supports both IPv4/IPv6)
             if not na.is_ipv6 and not na.host.replace(".", "").isdigit():
-                host = socket.getaddrinfo(na.host, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG)[0][4][0]
+                host = socket.getaddrinfo(
+                    na.host, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG
+                )[0][4][0]
             else:
                 host = na.host
         else:
