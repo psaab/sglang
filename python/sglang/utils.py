@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import random
-import socket
 import ssl
 import subprocess
 import sys
@@ -402,21 +401,16 @@ def reserve_port(host, start=30000, end=40000):
     Reserve an available port by trying to bind a socket.
     Returns a tuple (port, lock_socket) where `lock_socket` is kept open to hold the lock.
     """
+    from sglang.srt.utils.common import try_bind_socket
+
     candidates = list(range(start, end))
     random.shuffle(candidates)
-
-    from sglang.srt.utils.common import get_addrinfos_for_bind
-
     for port in candidates:
-        for family, socktype, proto, _, sockaddr in get_addrinfos_for_bind(host, port):
-            sock = socket.socket(family, socktype, proto)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                sock.bind(sockaddr)
-                return port, sock
-            except socket.error:
-                sock.close()
-                continue
+        try:
+            sock = try_bind_socket(host, port)
+            return port, sock
+        except OSError:
+            continue
     raise RuntimeError("No free port available.")
 
 
