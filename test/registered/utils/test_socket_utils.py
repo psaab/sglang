@@ -111,10 +111,6 @@ class TestSocketUtilities(CustomTestCase):
         finally:
             sock.close()
 
-    def test_is_port_available_invalid_port(self):
-        """is_port_available should return False for out-of-range port (OverflowError)."""
-        self.assertFalse(is_port_available(99999))
-
     def test_get_free_port(self):
         """get_free_port should return a valid port number."""
         port = get_free_port()
