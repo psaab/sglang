@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import ipaddress
 import logging
 import threading
 import time
@@ -251,7 +252,15 @@ class CommonKVManager(BaseKVManager):
         """Register prefill server info to bootstrap server via HTTP POST."""
         if self.dist_init_addr:
             # Multi-node case: bootstrap server's host is dist_init_addr
-            host = NetworkAddress.parse(self.dist_init_addr).host
+            na = NetworkAddress.parse(self.dist_init_addr)
+            # Resolve hostname to IP if needed (getaddrinfo supports both IPv4/IPv6)
+            try:
+                ipaddress.ip_address(na.host)
+                host = na.host
+            except ValueError:
+                host = socket.getaddrinfo(
+                    na.host, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG
+                )[0][4][0]
         else:
             # Single-node case: bootstrap server's host is the same as http server's host
             host = self.bootstrap_host
