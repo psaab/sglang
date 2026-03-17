@@ -959,7 +959,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
             == RemoteInstanceWeightLoaderBackend.NCCL
         ):
             if self.tp_rank == 0:
-                instance_ip = NetworkAddress(socket.gethostname(), 0).resolved().host
+                instance_ip = NetworkAddress.resolve_host(socket.gethostname())
                 t = threading.Thread(
                     target=trigger_init_weights_send_group_for_remote_instance_request,
                     args=(
