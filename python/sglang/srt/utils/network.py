@@ -448,9 +448,13 @@ class NetworkAddress:
             ipaddress.ip_address(host)
             return host
         except ValueError:
+            pass
+        try:
             return socket.getaddrinfo(
                 host, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG
             )[0][4][0]
+        except socket.gaierror as e:
+            raise ValueError(f"Cannot resolve host {host!r}: {e}") from e
 
     def resolved(self) -> NetworkAddress:
         """DNS-resolve hostname to IP; return self if already an IP."""
