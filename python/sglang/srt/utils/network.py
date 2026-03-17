@@ -416,6 +416,11 @@ class NetworkAddress:
     host: str
     port: int
 
+    def __post_init__(self):
+        # Auto-strip IPv6 brackets so callers can pass "[::1]" or "::1"
+        if self.host.startswith("[") and self.host.endswith("]"):
+            object.__setattr__(self, "host", self.host[1:-1])
+
     @property
     def is_ipv6(self) -> bool:
         return _is_ipv6(self.host)
@@ -502,17 +507,6 @@ class NetworkAddress:
                 f"Use [{host}]:{port_str} instead."
             )
         return NetworkAddress(host, _parse_port(port_str))
-
-    @staticmethod
-    def from_parts(host: str, port: int) -> NetworkAddress:
-        """Create from separate host and port, stripping brackets if present.
-
-        Useful when the host may come from user input that already has
-        brackets (e.g. ``[::1]``).
-        """
-        if host.startswith("[") and host.endswith("]"):
-            host = host[1:-1]
-        return NetworkAddress(host, port)
 
     def __str__(self) -> str:
         return self.to_host_port_str()

@@ -1229,7 +1229,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         success = False
         message = ""
         try:
-            na = NetworkAddress.from_parts(master_address, group_port)
+            na = NetworkAddress(master_address, group_port)
             self._weights_send_group[group_name] = init_custom_process_group(
                 backend=backend,
                 init_method=na.to_tcp(),
@@ -1275,7 +1275,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
 
         torch.cuda.empty_cache()
         success = False
-        na = NetworkAddress.from_parts(master_address, group_port)
+        na = NetworkAddress(master_address, group_port)
         message = ""
         try:
             for _, weights in self.model.named_parameters():
@@ -1328,7 +1328,7 @@ class ModelRunner(ModelRunnerKVCacheMixin):
         )
 
         try:
-            na = NetworkAddress.from_parts(master_address, master_port)
+            na = NetworkAddress(master_address, master_port)
             self._model_update_group[group_name] = init_custom_process_group(
                 backend=backend,
                 init_method=na.to_tcp(),
