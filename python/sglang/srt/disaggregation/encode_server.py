@@ -634,11 +634,10 @@ class MMEncoder:
             mm_data.embedding_list[mm_data.part_idx] = None
 
         # Send ack/data
-        endpoint = (
-            f"tcp://{url}"
-            if url is not None
-            else NetworkAddress(prefill_host, embedding_port).to_tcp()
-        )
+        if url is not None:
+            endpoint = NetworkAddress.parse(url).to_tcp()
+        else:
+            endpoint = NetworkAddress(prefill_host, embedding_port).to_tcp()
         logger.info(f"{endpoint = }")
 
         # Serialize data
