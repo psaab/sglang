@@ -436,6 +436,17 @@ class NetworkAddress:
         """``host:port`` string for gRPC listen address, session IDs, logs."""
         return f"{_wrap(self.host)}:{self.port}"
 
+    def resolved(self) -> NetworkAddress:
+        """DNS-resolve hostname to IP; return self if already an IP."""
+        try:
+            ipaddress.ip_address(self.host)
+            return self
+        except ValueError:
+            ip = socket.getaddrinfo(
+                self.host, None, socket.AF_UNSPEC, 0, 0, socket.AI_ADDRCONFIG
+            )[0][4][0]
+            return NetworkAddress(ip, self.port)
+
     def to_bind_tuple(self) -> Tuple[str, int]:
         """Raw ``(host, port)`` tuple for ``socket.bind()`` / ``socket.connect()``.
 
