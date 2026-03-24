@@ -1727,9 +1727,13 @@ def run_benchmark(args_: argparse.Namespace):
             "truss": 8080,
         }.get(args.backend, 30000)
 
-    # Build base URL with proper IPv6 bracket wrapping
-    _na = NetworkAddress(args.host, args.port)
-    _host_base = _na.to_url()
+    # Build base URL with proper IPv6 bracket wrapping (only when base_url is not provided)
+    if not args.base_url:
+        _na = NetworkAddress(args.host, args.port)
+        _host_base = _na.to_url()
+    else:
+        _na = None
+        _host_base = None
 
     model_url = (
         f"{args.base_url}/v1/models" if args.base_url else f"{_host_base}/v1/models"
